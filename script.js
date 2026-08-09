@@ -256,13 +256,14 @@ function getStoreState(now = new Date()) {
 
 function getClosedDetails(now = new Date()) {
   const returnDate = toValidDate(storeSettings.returnTime);
-  const formattedReturnTime = formatReturnTime(storeSettings.returnTime);
+  const formattedReturnTime = formatReturnTime(storeSettings.returnTime, now);
   const returnHour = formatLocalHour(returnDate);
+  const returnsToday = isSameStoreDate(returnDate, now);
   let returnText = "";
 
   if (formattedReturnTime) {
-    returnText = isSameStoreDate(returnDate, now)
-      ? `Abrimos hoje às ${returnHour}.`
+    returnText = returnsToday
+      ? `Cookies quentinhos a partir das ${returnHour}.`
       : formattedReturnTime.startsWith("amanhã")
         ? `Amanhã tem mais cookies quentinhos a partir das ${returnHour}.`
         : `Retornamos em ${formattedReturnTime}.`;
@@ -271,7 +272,9 @@ function getClosedDetails(now = new Date()) {
   return {
     formattedReturnTime,
     returnText,
-    title: `${STORE_NOTICE_ICON} Por hoje, encerramos!`,
+    title: returnsToday
+      ? `${STORE_NOTICE_ICON} Ainda estamos fechados!`
+      : `${STORE_NOTICE_ICON} Por hoje, encerramos!`,
     buttonText: formattedReturnTime
       ? `Pedidos fechados até ${formattedReturnTime}`
       : "Pedidos fechados"
