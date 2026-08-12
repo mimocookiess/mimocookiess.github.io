@@ -3,6 +3,11 @@ const PRODUCT_IMAGES_BUCKET = "product-images";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const ORDER_STATUS_FILTER_STORAGE_KEY =
   "mimo-admin-order-status-filters-v1";
+const ORDER_ALERTS_STORAGE_KEY = "mimo-admin-order-alerts-v1";
+const ADMIN_PAGE_TITLE = "Painel administrativo - Mimo Cookies";
+const ORDERS_POLL_INTERVAL_MS = 2 * 60 * 1000;
+const ORDERS_RETURN_REFRESH_THROTTLE_MS = 3 * 1000;
+const ORDERS_REALTIME_REFRESH_DELAY_MS = 250;
 const ORDER_STATUS_FILTER_VALUES = Object.freeze([
   "new",
   "confirmed",
@@ -74,6 +79,10 @@ const ordersList = document.querySelector("#orders-list");
 const ordersMessage = document.querySelector("#orders-message");
 const refreshOrdersButton =
   document.querySelector("#refresh-orders-button");
+const orderAlertsButton =
+  document.querySelector("#order-alerts-button");
+const ordersAlertsStatus =
+  document.querySelector("#orders-alerts-status");
 const orderStatusFilters =
   document.querySelector("#order-status-filters");
 const orderStatusFilterInputs = Array.from(
@@ -108,6 +117,17 @@ let productImagePreviewUrl = "";
 let isSavingProduct = false;
 let isSavingSettings = false;
 let settingsExpirationTimer = null;
+let isAdminAuthenticated = false;
+let ordersLoadPromise = null;
+let fullOrdersRefreshQueued = false;
+let ordersRealtimeChannel = null;
+let isOrdersRealtimeSubscribed = false;
+let ordersRealtimeRefreshTimer = null;
+let ordersPollingTimer = null;
+let lastOrdersReturnRefreshAt = 0;
+let orderAlertAudioContext = null;
+let orderAlertsEnabled = loadOrderAlertsPreference();
+const alertedOrderIds = new Set();
 const updatingOrderIds = new Set();
 
 function escapeHtml(value) {
@@ -287,12 +307,108 @@ function slugify(value) {
 function showLogin() {
   loginSection.hidden = false;
   dashboard.hidden = true;
+  document.title = ADMIN_PAGE_TITLE;
 }
 
 function showDashboard(user) {
   loginSection.hidden = true;
   dashboard.hidden = false;
   adminEmail.textContent = user.email || "";
+}
+
+function scheduleOrdersRefresh() {
+  if (ordersRealtimeRefreshTimer !== null) return;
+
+  ordersRealtimeRefreshTimer = window.setTimeout(() => {
+    ordersRealtimeRefreshTimer = null;
+    loadOrders({ showLoading: false });
+  }, ORDERS_REALTIME_REFRESH_DELAY_MS);
+}
+
+function stopAdminOrderSync() {
+  isOrdersRealtimeSubscribed = false;
+  alertedOrderIds.clear();
+
+  if (ordersRealtimeRefreshTimer !== null) {
+    window.clearTimeout(ordersRealtimeRefreshTimer);
+    ordersRealtimeRefreshTimer = null;
+  }
+
+  if (ordersPollingTimer !== null) {
+    window.clearInterval(ordersPollingTimer);
+    ordersPollingTimer = null;
+  }
+
+  if (ordersRealtimeChannel) {
+    const channel = ordersRealtimeChannel;
+    ordersRealtimeChannel = null;
+    supabaseClient.removeChannel(channel).catch(error => {
+      console.warn("Não foi possível remover o canal de pedidos.", error);
+    });
+  }
+}
+
+function startAdminOrderSync() {
+  if (!isAdminAuthenticated || ordersRealtimeChannel) return;
+
+  ordersRealtimeChannel = supabaseClient
+    .channel("admin-orders")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "orders" },
+      payload => {
+        if (!isAdminAuthenticated || !isOrdersRealtimeSubscribed) return;
+
+        const newOrder = payload.new;
+
+        if (newOrder?.id && !alertedOrderIds.has(newOrder.id)) {
+          alertedOrderIds.add(newOrder.id);
+          showNewOrderNotification(newOrder);
+        }
+
+        scheduleOrdersRefresh();
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders" },
+      () => {
+        if (!isAdminAuthenticated || !isOrdersRealtimeSubscribed) return;
+        scheduleOrdersRefresh();
+      }
+    )
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") {
+        isOrdersRealtimeSubscribed = true;
+        loadOrders({ showLoading: false });
+        return;
+      }
+
+      isOrdersRealtimeSubscribed = false;
+
+      if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+        console.warn(`Canal Realtime de pedidos: ${status}.`);
+      }
+    });
+
+  ordersPollingTimer = window.setInterval(() => {
+    if (!document.hidden && isAdminAuthenticated) {
+      loadOrders({ activeOnly: true, showLoading: false });
+    }
+  }, ORDERS_POLL_INTERVAL_MS);
+}
+
+async function startAdminSession(user) {
+  isAdminAuthenticated = true;
+  showDashboard(user);
+
+  await Promise.all([
+    loadProducts(),
+    loadOrders(),
+    loadStoreSettings()
+  ]);
+
+  startAdminOrderSync();
 }
 
 function isTomorrowAtNine(value, now = new Date()) {
@@ -347,6 +463,138 @@ function syncStoreSettingsForm(data) {
       loadStoreSettings();
     }, Math.min(delay + 50, 2_147_483_647));
   }
+}
+
+function loadOrderAlertsPreference() {
+  try {
+    return localStorage.getItem(ORDER_ALERTS_STORAGE_KEY) === "true";
+  } catch (error) {
+    console.warn("Não foi possível recuperar a preferência de alertas.", error);
+    return false;
+  }
+}
+
+function saveOrderAlertsPreference() {
+  try {
+    localStorage.setItem(
+      ORDER_ALERTS_STORAGE_KEY,
+      String(orderAlertsEnabled)
+    );
+  } catch (error) {
+    console.warn("Não foi possível salvar a preferência de alertas.", error);
+  }
+}
+
+function updateOrderAlertsControl(message = "") {
+  const notificationsSupported = "Notification" in window;
+  const notificationsBlocked = notificationsSupported
+    && Notification.permission === "denied";
+  const alertsActive = notificationsSupported
+    && !notificationsBlocked
+    && orderAlertsEnabled;
+
+  orderAlertsButton.textContent = alertsActive
+    ? "🔔 Alertas ativados"
+    : "🔔 Ativar alertas";
+  orderAlertsButton.setAttribute("aria-pressed", String(alertsActive));
+  orderAlertsButton.disabled = !notificationsSupported || notificationsBlocked;
+
+  if (message) {
+    ordersAlertsStatus.textContent = message;
+  } else if (!notificationsSupported) {
+    ordersAlertsStatus.textContent =
+      "Este navegador não oferece notificações.";
+  } else if (notificationsBlocked) {
+    ordersAlertsStatus.textContent =
+      "Notificações bloqueadas nas configurações do navegador.";
+  } else {
+    ordersAlertsStatus.textContent = "";
+  }
+}
+
+async function prepareOrderAlertAudio() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContext) return false;
+
+    orderAlertAudioContext ||= new AudioContext();
+
+    if (orderAlertAudioContext.state === "suspended") {
+      await orderAlertAudioContext.resume();
+    }
+
+    return orderAlertAudioContext.state === "running";
+  } catch (error) {
+    console.warn("Não foi possível preparar o som dos pedidos.", error);
+    return false;
+  }
+}
+
+async function playNewOrderSound() {
+  try {
+    if (!await prepareOrderAlertAudio()) return;
+
+    const context = orderAlertAudioContext;
+    const startAt = context.currentTime;
+    const gain = context.createGain();
+    const firstTone = context.createOscillator();
+    const secondTone = context.createOscillator();
+
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.12, startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.42);
+    gain.connect(context.destination);
+
+    firstTone.type = "sine";
+    firstTone.frequency.value = 659.25;
+    firstTone.connect(gain);
+    firstTone.start(startAt);
+    firstTone.stop(startAt + 0.18);
+
+    secondTone.type = "sine";
+    secondTone.frequency.value = 783.99;
+    secondTone.connect(gain);
+    secondTone.start(startAt + 0.16);
+    secondTone.stop(startAt + 0.42);
+  } catch (error) {
+    console.warn("Não foi possível tocar o alerta de novo pedido.", error);
+  }
+}
+
+function showNewOrderNotification(order) {
+  if (
+    !orderAlertsEnabled
+    || !("Notification" in window)
+    || Notification.permission !== "granted"
+  ) {
+    return;
+  }
+
+  playNewOrderSound();
+
+  try {
+    const notification = new Notification("Novo pedido na Mimo 🍪", {
+      body: `Pedido nº ${order.order_number} · ${BRL.format(Number(order.total))}`,
+      tag: `mimo-order-${order.id}`,
+      requireInteraction: true
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      selectAdminTab("orders");
+      notification.close();
+    };
+  } catch (error) {
+    console.warn("Não foi possível mostrar a notificação do pedido.", error);
+  }
+}
+
+function updatePendingOrdersIndicator() {
+  const pendingOrders = orders.filter(order => order.status === "new").length;
+  document.title = pendingOrders
+    ? `(${pendingOrders}) ${ADMIN_PAGE_TITLE}`
+    : ADMIN_PAGE_TITLE;
 }
 
 function setSettingsSaving(saving) {
@@ -459,13 +707,7 @@ async function verifyAdmin() {
     return;
   }
 
-  showDashboard(user);
-
-  await Promise.all([
-    loadProducts(),
-    loadOrders(),
-    loadStoreSettings()
-]);
+  await startAdminSession(user);
 }
 
 loginForm.addEventListener("submit", async event => {
@@ -507,16 +749,12 @@ loginForm.addEventListener("submit", async event => {
   }
 
   loginPassword.value = "";
-  showDashboard(data.user);
-
-  await Promise.all([
-    loadProducts(),
-    loadOrders(),
-    loadStoreSettings()
-]);
+  await startAdminSession(data.user);
 });
 
 logoutButton.addEventListener("click", async () => {
+  isAdminAuthenticated = false;
+  stopAdminOrderSync();
   await supabaseClient.auth.signOut();
   productForm.reset();
   resetProductForm();
@@ -865,11 +1103,8 @@ function formatDate(dateValue) {
   }).format(new Date(dateValue));
 }
 
-async function loadOrders() {
-  ordersList.innerHTML =
-    '<p class="muted">Carregando pedidos...</p>';
-
-  const { data, error } = await supabaseClient
+function buildOrdersQuery(activeOnly = false) {
+  let query = supabaseClient
     .from("orders")
     .select(`
       id,
@@ -895,27 +1130,80 @@ async function loadOrders() {
         quantity,
         line_total
       )
-    `)
-    .order("created_at", { ascending: false });
+    `);
 
-  if (error) {
-    console.error(error);
-
-    ordersList.innerHTML = `
-      <p class="message error">
-        Não foi possível carregar os pedidos.
-      </p>
-    `;
-
-    return;
+  if (activeOnly) {
+    query = query.in("status", ACTIVE_ORDER_STATUS_VALUES);
   }
 
-  orders = data || [];
-  renderOrders();
+  return query.order("created_at", { ascending: false });
+}
+
+async function loadOrders({ activeOnly = false, showLoading = true } = {}) {
+  if (!isAdminAuthenticated) return;
+
+  if (ordersLoadPromise) {
+    if (!activeOnly) fullOrdersRefreshQueued = true;
+    return ordersLoadPromise;
+  }
+
+  ordersLoadPromise = (async () => {
+    let nextLoadIsActiveOnly = activeOnly;
+    let shouldShowLoading = showLoading;
+
+    do {
+      fullOrdersRefreshQueued = false;
+
+      if (shouldShowLoading) {
+        ordersList.innerHTML =
+          '<p class="muted">Carregando pedidos...</p>';
+      }
+
+      const { data, error } = await buildOrdersQuery(nextLoadIsActiveOnly);
+
+      if (error) {
+        console.error("Não foi possível carregar os pedidos.", error);
+
+        if (shouldShowLoading) {
+          ordersList.innerHTML = `
+            <p class="message error">
+              Não foi possível carregar os pedidos.
+            </p>
+          `;
+        }
+
+        return;
+      }
+
+      if (nextLoadIsActiveOnly) {
+        const historicalOrders = orders.filter(order =>
+          !ACTIVE_ORDER_STATUS_VALUES.includes(order.status)
+        );
+
+        orders = [...(data || []), ...historicalOrders].sort(
+          (firstOrder, secondOrder) =>
+            new Date(secondOrder.created_at) - new Date(firstOrder.created_at)
+        );
+      } else {
+        orders = data || [];
+      }
+
+      renderOrders();
+      shouldShowLoading = false;
+      nextLoadIsActiveOnly = false;
+    } while (fullOrdersRefreshQueued && isAdminAuthenticated);
+  })();
+
+  try {
+    await ordersLoadPromise;
+  } finally {
+    ordersLoadPromise = null;
+  }
 }
 
 function renderOrders() {
   updateOrderStatusFilterControls();
+  updatePendingOrdersIndicator();
 
   if (!selectedOrderStatuses.size) {
     ordersList.innerHTML = `
@@ -1330,6 +1618,8 @@ refreshButton.addEventListener("click", loadProducts);
 
 supabaseClient.auth.onAuthStateChange(event => {
   if (event === "SIGNED_OUT") {
+    isAdminAuthenticated = false;
+    stopAdminOrderSync();
     showLogin();
   }
 });
@@ -1515,7 +1805,39 @@ async function cancelOrder(orderId) {
   ]);
 }
 
-refreshOrdersButton.addEventListener("click", loadOrders);
+refreshOrdersButton.addEventListener("click", () => loadOrders());
+
+orderAlertsButton.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    updateOrderAlertsControl();
+    return;
+  }
+
+  if (orderAlertsEnabled && Notification.permission === "granted") {
+    orderAlertsEnabled = false;
+    saveOrderAlertsPreference();
+    updateOrderAlertsControl("Alertas desativados.");
+    return;
+  }
+
+  let permission = Notification.permission;
+
+  if (permission === "default") {
+    permission = await Notification.requestPermission();
+  }
+
+  if (permission !== "granted") {
+    orderAlertsEnabled = false;
+    saveOrderAlertsPreference();
+    updateOrderAlertsControl();
+    return;
+  }
+
+  await prepareOrderAlertAudio();
+  orderAlertsEnabled = true;
+  saveOrderAlertsPreference();
+  updateOrderAlertsControl();
+});
 
 orderStatusFilters.addEventListener("change", event => {
   if (!event.target.matches('input[type="checkbox"]')) return;
@@ -1546,40 +1868,61 @@ orderStatusFilters.addEventListener("click", event => {
 });
 
 updateOrderStatusFilterControls();
+updateOrderAlertsControl();
+
+if (orderAlertsEnabled) {
+  document.addEventListener("pointerdown", prepareOrderAlertAudio, {
+    once: true
+  });
+}
+
+function selectAdminTab(selectedTab) {
+  tabButtons.forEach(tabButton => {
+    const isSelected = tabButton.dataset.tab === selectedTab;
+
+    tabButton.classList.toggle("active", isSelected);
+    tabButton.setAttribute("aria-selected", String(isSelected));
+  });
+
+  tabPanels.forEach(panelElement => {
+    const isSelected = panelElement.dataset.panel === selectedTab;
+
+    panelElement.hidden = !isSelected;
+    panelElement.classList.toggle("active", isSelected);
+  });
+
+  if (selectedTab === "orders") {
+    loadOrders({ showLoading: false });
+  } else if (selectedTab === "settings") {
+    loadStoreSettings();
+  }
+}
 
 tabButtons.forEach(button => {
   button.addEventListener("click", () => {
-    const selectedTab = button.dataset.tab;
-
-    tabButtons.forEach(tabButton => {
-      const isSelected =
-        tabButton.dataset.tab === selectedTab;
-
-      tabButton.classList.toggle("active", isSelected);
-      tabButton.setAttribute(
-        "aria-selected",
-        String(isSelected)
-      );
-    });
-
-    tabPanels.forEach(panelElement => {
-      const isSelected =
-        panelElement.dataset.panel === selectedTab;
-
-      panelElement.hidden = !isSelected;
-
-      panelElement.classList.toggle(
-        "active",
-        isSelected
-      );
-    });
-
-    if (selectedTab === "orders") {
-      loadOrders();
-    } else if (selectedTab === "settings") {
-      loadStoreSettings();
-    }
+    selectAdminTab(button.dataset.tab);
   });
+});
+
+function refreshOrdersAfterReturn() {
+  if (!isAdminAuthenticated || document.hidden) return;
+
+  const now = Date.now();
+
+  if (now - lastOrdersReturnRefreshAt < ORDERS_RETURN_REFRESH_THROTTLE_MS) {
+    return;
+  }
+
+  lastOrdersReturnRefreshAt = now;
+  loadOrders({ showLoading: false });
+}
+
+window.addEventListener("focus", refreshOrdersAfterReturn);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshOrdersAfterReturn();
+});
+window.addEventListener("pagehide", event => {
+  if (!event.persisted) stopAdminOrderSync();
 });
 
 verifyAdmin();

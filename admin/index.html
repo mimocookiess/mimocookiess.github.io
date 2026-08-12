@@ -6,7 +6,7 @@
 
   <meta name="robots" content="noindex, nofollow">
 
-  <title>Painel administrativo — Mimo Cookies</title>
+  <title>Painel administrativo - Mimo Cookies</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,7 +22,7 @@
   <link rel="icon" type="image/png" sizes="512x512" href="../assets/icons/favicon-512x512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="admin.css?v=8">
+  <link rel="stylesheet" href="admin.css?v=9">
 </head>
 
 <body>
@@ -392,13 +392,30 @@
       <h2>Pedidos recebidos</h2>
     </div>
 
-    <button
-      class="secondary-button"
-      id="refresh-orders-button"
-      type="button"
-    >
-      Atualizar
-    </button>
+    <div class="orders-heading-actions">
+      <button
+        class="secondary-button"
+        id="order-alerts-button"
+        type="button"
+        aria-pressed="false"
+      >
+        🔔 Ativar alertas
+      </button>
+
+      <button
+        class="secondary-button"
+        id="refresh-orders-button"
+        type="button"
+      >
+        Atualizar
+      </button>
+
+      <span
+        class="orders-alerts-status muted"
+        id="orders-alerts-status"
+        role="status"
+      ></span>
+    </div>
   </div>
 
   <fieldset class="order-filters" id="order-status-filters">
@@ -470,6 +487,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../supabase-config.js?v=1"></script>
   <script src="../store-status.js?v=1"></script>
-  <script src="admin.js?v=12"></script>
+  <script src="admin.js?v=13"></script>
 </body>
 </html>

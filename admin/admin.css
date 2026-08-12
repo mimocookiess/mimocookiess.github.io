@@ -349,6 +349,21 @@ button:disabled {
   margin-top: 24px;
 }
 
+.orders-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.orders-alerts-status {
+  flex-basis: 100%;
+  max-width: 320px;
+  font-size: 0.82rem;
+  text-align: right;
+}
+
 .order-filters {
   display: grid;
   gap: 14px;
@@ -411,6 +426,18 @@ button:disabled {
   border: 1px dashed var(--border);
   border-radius: 14px;
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .orders-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .orders-alerts-status {
+    max-width: none;
+    text-align: left;
+  }
 }
 
 .order-card {
