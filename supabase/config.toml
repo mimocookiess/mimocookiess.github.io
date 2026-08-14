@@ -3,3 +3,6 @@ project_id = "gixpumwhnvsetohjsmoj"
 
 [functions.create-order]
 verify_jwt = false
+
+[functions.notify-new-order]
+verify_jwt = false
