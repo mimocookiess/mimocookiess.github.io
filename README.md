@@ -7,7 +7,7 @@ Site estático, responsivo e pronto para GitHub Pages.
 Abra `config.js` e preencha o número do WhatsApp e a site key pública do Cloudflare Turnstile:
 
 ```js
-whatsappNumber: "559391985864",
+whatsappNumber: "5593984120133",
 turnstileSiteKey: "SUA_SITE_KEY_PUBLICA"
 ```
 
