@@ -101,7 +101,7 @@
       `T${pad(parts.hour)}:${pad(parts.minute)}`;
   }
 
-  function getTomorrowAtNine(now = new Date()) {
+  function getTomorrowAtTen(now = new Date()) {
     const parts = getStoreDateTimeParts(now);
 
     if (!parts) return null;
@@ -114,7 +114,7 @@
     const pad = number => String(number).padStart(2, "0");
     const localValue = `${tomorrow.getUTCFullYear()}-` +
       `${pad(tomorrow.getUTCMonth() + 1)}-` +
-      `${pad(tomorrow.getUTCDate())}T09:00`;
+      `${pad(tomorrow.getUTCDate())}T10:00`;
 
     return storeLocalDateTimeToDate(localValue);
   }
@@ -160,7 +160,7 @@
     buildStoreSettingsUpdate,
     getStoreDateTimeParts,
     getStoreState,
-    getTomorrowAtNine,
+    getTomorrowAtTen,
     normalizeStoreMode,
     storeLocalDateTimeToDate,
     toValidDate,

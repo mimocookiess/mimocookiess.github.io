@@ -32,7 +32,7 @@ const {
   STORE_MODES,
   buildStoreSettingsUpdate,
   getStoreState: resolveStoreState,
-  getTomorrowAtNine,
+  getTomorrowAtTen,
   normalizeStoreMode,
   storeLocalDateTimeToDate,
   toValidDate,
@@ -411,11 +411,11 @@ async function startAdminSession(user) {
   startAdminOrderSync();
 }
 
-function isTomorrowAtNine(value, now = new Date()) {
+function isTomorrowAtTen(value, now = new Date()) {
   if (!value) return false;
 
   const returnDate = storeLocalDateTimeToDate(value);
-  const tomorrow = getTomorrowAtNine(now);
+  const tomorrow = getTomorrowAtTen(now);
 
   if (!returnDate || !tomorrow) return false;
 
@@ -810,7 +810,7 @@ storeIsPaused.addEventListener("change", () => {
 
   storeClosedToday.checked = false;
 
-  if (isTomorrowAtNine(storeReturnTime.value)) {
+  if (isTomorrowAtTen(storeReturnTime.value)) {
     storeReturnTime.value = "";
   }
 });
@@ -832,16 +832,16 @@ storeClosedToday.addEventListener("change", async () => {
   storeIsPaused.checked = false;
   setMessage(settingsMessage);
 
-  const tomorrowAtNine = getTomorrowAtNine();
+  const tomorrowAtTen = getTomorrowAtTen();
   const values = buildStoreSettingsUpdate(
     STORE_MODES.CLOSED_TODAY,
-    tomorrowAtNine?.toISOString(),
+    tomorrowAtTen?.toISOString(),
     storePauseMessage.value
   );
 
   const saved = await saveStoreSettings(
     values,
-    "Loja fechada por hoje. Retorno definido para amanhã às 9h."
+    "Loja fechada por hoje. Retorno definido para amanhã às 10h."
   );
 
   if (!saved) {

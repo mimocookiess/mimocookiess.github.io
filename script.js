@@ -742,7 +742,7 @@ function renderProducts() {
           <img
             class="product-image"
             src="${getSafeImageSource(product.image)}"
-            alt="${productName}"
+            alt="Cookie ${productName} da Mimo Cookies"
             loading="lazy"
           >
 
