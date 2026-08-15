@@ -23,6 +23,11 @@ const PRODUCT_IMAGE_EXTENSIONS = Object.freeze({
   "image/png": "png",
   "image/webp": "webp"
 });
+const {
+  DEFAULT_MAX_DIMENSION: MAX_PRODUCT_IMAGE_DIMENSION,
+  DEFAULT_WEBP_QUALITY: PRODUCT_IMAGE_WEBP_QUALITY,
+  optimizeProductImage
+} = MimoProductImageOptimizer;
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -256,13 +261,34 @@ async function uploadProductImage(file) {
     );
   }
 
-  const extension = PRODUCT_IMAGE_EXTENSIONS[file.type];
+  const optimizationResult = await optimizeProductImage(file, {
+    maxDimension: MAX_PRODUCT_IMAGE_DIMENSION,
+    quality: PRODUCT_IMAGE_WEBP_QUALITY
+  });
+  const uploadFile = optimizationResult.file;
+  const extension = PRODUCT_IMAGE_EXTENSIONS[uploadFile.type];
+
+  if (!extension) {
+    throw new Error(
+      "O navegador gerou um formato de imagem não suportado."
+    );
+  }
+
+  setProductFormSaving(true, "Enviando imagem...");
+  setMessage(
+    productMessage,
+    optimizationResult.wasOptimized
+      ? "Imagem otimizada. Enviando..."
+      : "A imagem original já é a opção menor. Enviando...",
+    "loading"
+  );
+
   const objectPath = `products/${crypto.randomUUID()}.${extension}`;
   const { error: uploadError } = await supabaseClient.storage
     .from(PRODUCT_IMAGES_BUCKET)
-    .upload(objectPath, file, {
+    .upload(objectPath, uploadFile, {
       cacheControl: "31536000",
-      contentType: file.type,
+      contentType: uploadFile.type,
       upsert: false
     });
 
@@ -1437,11 +1463,11 @@ productForm.addEventListener("submit", async event => {
 
   setProductFormSaving(
     true,
-    selectedImage ? "Enviando imagem..." : "Salvando..."
+    selectedImage ? "Otimizando imagem..." : "Salvando..."
   );
 
   if (selectedImage) {
-    setMessage(productMessage, "Enviando imagem...", "loading");
+    setMessage(productMessage, "Otimizando imagem...", "loading");
 
     try {
       values.image_url = await uploadProductImage(selectedImage);
