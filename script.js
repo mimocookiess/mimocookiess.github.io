@@ -18,6 +18,7 @@ let lastRegisteredSignature = null;
 let lastWhatsAppUrl = null;
 let turnstileToken = null;
 let turnstileWidgetId = null;
+let turnstileApiRequested = false;
 let cartConfirmationTimeout = null;
 let cartConfirmationFrame = null;
 let storeSettings = {
@@ -522,6 +523,8 @@ async function getEdgeFunctionErrorMessage(error) {
 }
 
 function loadTurnstileApi() {
+  if (turnstileApiRequested) return;
+
   if (!String(STORE_CONFIG.turnstileSiteKey || "").trim()) {
     setTurnstileMessage(
       "A verificação de segurança ainda não foi configurada.",
@@ -530,6 +533,8 @@ function loadTurnstileApi() {
     refreshWhatsappButton();
     return;
   }
+
+  turnstileApiRequested = true;
 
   const script = document.createElement("script");
 
@@ -743,7 +748,10 @@ function renderProducts() {
             class="product-image"
             src="${getSafeImageSource(product.image)}"
             alt="Cookie ${productName} da Mimo Cookies"
+            width="800"
+            height="820"
             loading="lazy"
+            decoding="async"
           >
 
           <span class="status-pill ${status.className}">
@@ -881,7 +889,14 @@ function updateCart() {
 
       return `
         <div class="cart-item">
-          <img src="${getSafeImageSource(product.image)}" alt="">
+          <img
+            src="${getSafeImageSource(product.image)}"
+            alt=""
+            width="62"
+            height="62"
+            loading="lazy"
+            decoding="async"
+          >
 
           <div>
             <h4>${escapeHtml(product.name)}</h4>
@@ -936,6 +951,7 @@ cartItems.addEventListener("click", event => {
 });
 
 function openCart() {
+  loadTurnstileApi();
   panel.classList.add("open");
   panel.setAttribute("aria-hidden", "false");
   cartFab.setAttribute("aria-expanded", "true");
@@ -1256,4 +1272,3 @@ async function initializeStore() {
 
 initializeStore();
 loadStoreSettings();
-loadTurnstileApi();

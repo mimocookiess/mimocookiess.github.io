@@ -1,0 +1,20 @@
+/assets/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/style.css
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/config.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/supabase-config.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/products.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/store-status.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/script.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
