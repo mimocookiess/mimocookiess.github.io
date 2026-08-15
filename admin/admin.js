@@ -18,6 +18,12 @@ const ACTIVE_ORDER_STATUS_VALUES = Object.freeze([
   "new",
   "confirmed"
 ]);
+const CANCELLATION_REASON_LABELS = Object.freeze({
+  test_order: "Pedido de teste",
+  duplicate_order: "Pedido duplicado",
+  whatsapp_not_confirmed: "Cliente não confirmou no WhatsApp",
+  other: "Outro"
+});
 const PRODUCT_IMAGE_EXTENSIONS = Object.freeze({
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -1145,6 +1151,7 @@ function buildOrdersQuery(activeOnly = false) {
       delivery_fee,
       total,
       status,
+      cancellation_reason,
       created_at,
       confirmed_at,
       cancelled_at,
@@ -1289,6 +1296,10 @@ function renderOrders() {
       "completed"
     ].includes(order.status);
 
+    const cancellationReasonLabel = order.status === "cancelled"
+      ? CANCELLATION_REASON_LABELS[order.cancellation_reason]
+      : "";
+
     return `
       <article
         class="order-card ${orderStatus}"
@@ -1364,6 +1375,17 @@ function renderOrders() {
             : ""
         }
 
+        ${
+          cancellationReasonLabel
+            ? `
+              <div class="order-cancellation-reason">
+                <strong>Motivo do cancelamento:</strong>
+                ${escapeHtml(cancellationReasonLabel)}
+              </div>
+            `
+            : ""
+        }
+
         <div class="order-items">
           ${itemsHtml}
         </div>
@@ -1371,7 +1393,7 @@ function renderOrders() {
         ${
           canConfirm || canComplete || canCancel
             ? `
-              <div class="order-actions">
+              <div class="order-actions" data-order-actions>
                 ${
                   canConfirm
                     ? `
@@ -1414,6 +1436,45 @@ function renderOrders() {
                     : ""
                 }
               </div>
+
+              ${
+                canCancel
+                  ? `
+                    <div class="order-cancellation-form" data-cancellation-form hidden>
+                      <label>
+                        Motivo do cancelamento
+                        <select data-cancellation-reason>
+                          <option value="">Selecione um motivo</option>
+                          <option value="test_order">Pedido de teste</option>
+                          <option value="duplicate_order">Pedido duplicado</option>
+                          <option value="whatsapp_not_confirmed">Cliente não confirmou no WhatsApp</option>
+                          <option value="other">Outro</option>
+                        </select>
+                      </label>
+
+                      <p class="message error" data-cancellation-error></p>
+
+                      <div class="order-cancellation-actions">
+                        <button
+                          class="cancel-order-button"
+                          type="button"
+                          data-confirm-cancellation="${orderId}"
+                          disabled
+                        >
+                          Confirmar cancelamento
+                        </button>
+                        <button
+                          class="secondary-button"
+                          type="button"
+                          data-close-cancellation
+                        >
+                          Voltar
+                        </button>
+                      </div>
+                    </div>
+                  `
+                  : ""
+              }
             `
             : ""
         }
@@ -1660,6 +1721,12 @@ ordersList.addEventListener("click", async event => {
   const cancelButton =
     event.target.closest("[data-cancel-order]");
 
+  const confirmCancellationButton =
+    event.target.closest("[data-confirm-cancellation]");
+
+  const closeCancellationButton =
+    event.target.closest("[data-close-cancellation]");
+
   if (completeButton) {
     await completeOrder(completeButton.dataset.completeOrder);
     return;
@@ -1671,9 +1738,58 @@ ordersList.addEventListener("click", async event => {
   }
 
   if (cancelButton) {
-    await cancelOrder(cancelButton.dataset.cancelOrder);
+    showCancellationForm(cancelButton.dataset.cancelOrder);
+    return;
+  }
+
+  if (confirmCancellationButton) {
+    await cancelOrder(
+      confirmCancellationButton.dataset.confirmCancellation
+    );
+    return;
+  }
+
+  if (closeCancellationButton) {
+    closeCancellationForm(closeCancellationButton);
   }
 });
+
+ordersList.addEventListener("change", event => {
+  const reasonSelect = event.target.closest("[data-cancellation-reason]");
+
+  if (!reasonSelect) return;
+
+  const form = reasonSelect.closest("[data-cancellation-form]");
+  const confirmButton = form.querySelector("[data-confirm-cancellation]");
+
+  confirmButton.disabled = !Object.hasOwn(
+    CANCELLATION_REASON_LABELS,
+    reasonSelect.value
+  );
+});
+
+function showCancellationForm(orderId) {
+  const orderCard = ordersList.querySelector(
+    `[data-order-id="${CSS.escape(orderId)}"]`
+  );
+
+  if (!orderCard) return;
+
+  orderCard.querySelector("[data-order-actions]").hidden = true;
+  orderCard.querySelector("[data-cancellation-form]").hidden = false;
+  orderCard.querySelector("[data-cancellation-reason]").focus();
+}
+
+function closeCancellationForm(button) {
+  const orderCard = button.closest("[data-order-id]");
+  const form = orderCard.querySelector("[data-cancellation-form]");
+
+  form.hidden = true;
+  form.querySelector("[data-cancellation-reason]").value = "";
+  form.querySelector("[data-confirm-cancellation]").disabled = true;
+  setMessage(form.querySelector("[data-cancellation-error]"));
+  orderCard.querySelector("[data-order-actions]").hidden = false;
+}
 
 function setOrderUpdating(orderId, updating) {
   if (updating) {
@@ -1688,9 +1804,23 @@ function setOrderUpdating(orderId, updating) {
 
   if (!orderCard) return;
 
-  orderCard.querySelectorAll("button").forEach(button => {
-    button.disabled = updating;
+  orderCard.querySelectorAll("button, select").forEach(control => {
+    control.disabled = updating;
   });
+
+  if (!updating) {
+    const reasonSelect = orderCard.querySelector("[data-cancellation-reason]");
+    const confirmCancellationButton = orderCard.querySelector(
+      "[data-confirm-cancellation]"
+    );
+
+    if (reasonSelect && confirmCancellationButton) {
+      confirmCancellationButton.disabled = !Object.hasOwn(
+        CANCELLATION_REASON_LABELS,
+        reasonSelect.value
+      );
+    }
+  }
 
   const completeButton = orderCard.querySelector(
     "[data-complete-order]"
@@ -1802,26 +1932,55 @@ async function confirmOrder(orderId) {
 }
 
 async function cancelOrder(orderId) {
+  if (updatingOrderIds.has(orderId)) return;
+
   const order = orders.find(item => item.id === orderId);
 
   if (!order) return;
 
-  const confirmed = window.confirm(
-    `Cancelar o pedido nº ${order.order_number}?`
+  const orderCard = ordersList.querySelector(
+    `[data-order-id="${CSS.escape(orderId)}"]`
   );
+  const form = orderCard?.querySelector("[data-cancellation-form]");
+  const reason = form?.querySelector("[data-cancellation-reason]").value;
+  const errorMessage = form?.querySelector("[data-cancellation-error]");
+  const confirmButton = form?.querySelector("[data-confirm-cancellation]");
 
-  if (!confirmed) return;
-
-  const { error } = await supabaseClient.rpc(
-    "cancel_order",
-    {
-      p_order_id: orderId
+  if (!Object.hasOwn(CANCELLATION_REASON_LABELS, reason)) {
+    if (errorMessage) {
+      setMessage(errorMessage, "Selecione um motivo para continuar.", "error");
     }
-  );
+    return;
+  }
+
+  setMessage(errorMessage);
+  setOrderUpdating(orderId, true);
+
+  if (confirmButton) confirmButton.textContent = "Cancelando...";
+
+  let error;
+
+  try {
+    ({ error } = await supabaseClient.rpc(
+      "cancel_order_with_reason",
+      {
+        p_order_id: orderId,
+        p_reason: reason
+      }
+    ));
+  } catch (requestError) {
+    error = requestError;
+  }
 
   if (error) {
     console.error(error);
-    window.alert(error.message);
+    setOrderUpdating(orderId, false);
+    if (confirmButton) confirmButton.textContent = "Confirmar cancelamento";
+    setMessage(
+      errorMessage,
+      `Não foi possível cancelar o pedido: ${error.message}`,
+      "error"
+    );
     return;
   }
 
@@ -1829,6 +1988,13 @@ async function cancelOrder(orderId) {
     loadOrders(),
     loadProducts()
   ]);
+
+  updatingOrderIds.delete(orderId);
+  setMessage(
+    ordersMessage,
+    `Pedido Mimo nº ${order.order_number} cancelado com sucesso.`,
+    "success"
+  );
 }
 
 refreshOrdersButton.addEventListener("click", () => loadOrders());

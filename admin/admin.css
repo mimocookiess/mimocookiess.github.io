@@ -26,7 +26,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -99,7 +100,8 @@ label small {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -110,7 +112,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--brown-soft);
   box-shadow: 0 0 0 3px rgba(149, 101, 85, 0.12);
 }
@@ -577,6 +580,14 @@ button:disabled {
   background: #28723f;
 }
 
+.order-cancellation-reason {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff1f1;
+  color: var(--text);
+}
+
 .order-actions .complete-order-button {
   background: #176b62;
 }
@@ -597,6 +608,36 @@ button:disabled {
   background: var(--white);
   box-shadow: var(--shadow);
   overflow-x: auto;
+}
+
+.order-cancellation-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #efd0d0;
+  border-radius: 14px;
+  background: #fff9f9;
+}
+
+.order-cancellation-form[hidden] {
+  display: none;
+}
+
+.order-cancellation-form .message {
+  min-height: 0;
+}
+
+.order-cancellation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.order-cancellation-actions .cancel-order-button {
+  border: 1px solid #efd0d0;
+  background: #fff6f6;
+  color: var(--danger);
 }
 
 .orders-message {
@@ -678,6 +719,14 @@ button:disabled {
   }
 
   .order-actions button {
+    width: 100%;
+  }
+
+  .order-cancellation-actions {
+    flex-direction: column;
+  }
+
+  .order-cancellation-actions button {
     width: 100%;
   }
 }
