@@ -7,6 +7,10 @@ import {
 
 const MAX_BODY_BYTES = 32_768;
 const MAX_TURNSTILE_TOKEN_LENGTH = 2_048;
+const CHECKOUT_ATTEMPT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const GA_CLIENT_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+const GA_SESSION_ID_PATTERN = /^\d{1,32}$/;
 
 const SAFE_RPC_ERROR_MESSAGES = new Set([
   "Nome inválido.",
@@ -34,6 +38,11 @@ type OrderPayload = {
 
 type RequestPayload = {
   turnstileToken: string;
+  checkoutAttemptId: string;
+  analytics: {
+    clientId: string | null;
+    sessionId: string | null;
+  };
   order: OrderPayload;
 };
 
@@ -106,6 +115,21 @@ function isValidOrder(value: unknown): value is OrderPayload {
     Number.isSafeInteger(item.quantity) &&
     item.quantity >= 1 &&
     item.quantity <= 20
+  );
+}
+
+function isValidAnalytics(value: unknown) {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value)) return false;
+
+  const clientId = value.client_id;
+  const sessionId = value.session_id;
+
+  return (
+    (clientId === undefined || clientId === null ||
+      (typeof clientId === "string" && GA_CLIENT_ID_PATTERN.test(clientId))) &&
+    (sessionId === undefined || sessionId === null ||
+      (typeof sessionId === "string" && GA_SESSION_ID_PATTERN.test(sessionId)))
   );
 }
 
@@ -222,11 +246,17 @@ async function parseRequest(request: Request): Promise<RequestPayload | null> {
   if (!isRecord(payload)) return null;
 
   const token = payload.turnstileToken;
+  const checkoutAttemptId = payload.checkout_attempt_id;
+  const analytics = payload.analytics;
 
   if (
     typeof token !== "string" ||
     token.length < 1 ||
     token.length > MAX_TURNSTILE_TOKEN_LENGTH ||
+    (checkoutAttemptId !== undefined &&
+      (typeof checkoutAttemptId !== "string" ||
+        !CHECKOUT_ATTEMPT_ID_PATTERN.test(checkoutAttemptId))) ||
+    !isValidAnalytics(analytics) ||
     !isValidOrder(payload.order)
   ) {
     return null;
@@ -234,6 +264,17 @@ async function parseRequest(request: Request): Promise<RequestPayload | null> {
 
   return {
     turnstileToken: token,
+    checkoutAttemptId: typeof checkoutAttemptId === "string"
+      ? checkoutAttemptId
+      : crypto.randomUUID(),
+    analytics: {
+      clientId: isRecord(analytics) && typeof analytics.client_id === "string"
+        ? analytics.client_id
+        : null,
+      sessionId: isRecord(analytics) && typeof analytics.session_id === "string"
+        ? analytics.session_id
+        : null
+    },
     order: payload.order
   };
 }
@@ -378,7 +419,12 @@ Deno.serve(async request => {
 
     const result = await supabaseAdmin.rpc(
       "create_order",
-      payload.order
+      {
+        ...payload.order,
+        p_checkout_attempt_id: payload.checkoutAttemptId,
+        p_ga_client_id: payload.analytics.clientId,
+        p_ga_session_id: payload.analytics.sessionId
+      }
     );
 
     data = result.data;

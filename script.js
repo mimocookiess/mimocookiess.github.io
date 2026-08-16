@@ -21,6 +21,9 @@ let turnstileWidgetId = null;
 let turnstileApiRequested = false;
 let cartConfirmationTimeout = null;
 let cartConfirmationFrame = null;
+let checkoutAttempt = null;
+let checkoutStarted = false;
+const trackedOrderCreatedIds = new Set();
 let storeSettings = {
   isPaused: false,
   mode: STORE_MODES.OPEN,
@@ -586,6 +589,42 @@ function getCurrentOrderSignature() {
   });
 }
 
+function createCheckoutAttemptId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hexadecimal = [...bytes]
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  return [
+    hexadecimal.slice(0, 8),
+    hexadecimal.slice(8, 12),
+    hexadecimal.slice(12, 16),
+    hexadecimal.slice(16, 20),
+    hexadecimal.slice(20)
+  ].join("-");
+}
+
+function getCheckoutAttemptId(orderSignature) {
+  if (checkoutAttempt?.signature === orderSignature) {
+    return checkoutAttempt.id;
+  }
+
+  checkoutAttempt = {
+    id: createCheckoutAttemptId(),
+    signature: orderSignature
+  };
+
+  return checkoutAttempt.id;
+}
+
 function refreshWhatsappButton() {
   const quantity = [...cart.values()]
     .reduce((sum, value) => sum + value, 0);
@@ -813,6 +852,8 @@ function addItem(id) {
 
   cart.set(id, currentQuantity + 1);
 
+  window.MimoAnalytics?.trackAddToCart(product, 1);
+
   updateCart();
   showCartConfirmation(product.name);
 }
@@ -827,6 +868,7 @@ function changeQuantity(id, delta) {
 
   if (next <= 0) {
     cart.delete(id);
+    window.MimoAnalytics?.trackRemoveFromCart(product, current);
     updateCart();
     return;
   }
@@ -842,6 +884,13 @@ function changeQuantity(id, delta) {
   }
 
   cart.set(id, next);
+
+  if (next > current) {
+    window.MimoAnalytics?.trackAddToCart(product, next - current);
+  } else if (next < current) {
+    window.MimoAnalytics?.trackRemoveFromCart(product, current - next);
+  }
+
   updateCart();
 }
 
@@ -859,6 +908,15 @@ function calculateSubtotal() {
   }, 0);
 }
 
+function getCartAnalyticsLines() {
+  return [...cart.entries()]
+    .map(([id, quantity]) => ({
+      product: getProduct(id),
+      quantity
+    }))
+    .filter(line => line.product);
+}
+
 function updateCart() {
   const quantity = [...cart.values()]
     .reduce((sum, value) => sum + value, 0);
@@ -874,6 +932,7 @@ function updateCart() {
   refreshWhatsappButton();
 
   if (!quantity) {
+    checkoutStarted = false;
     cartItems.innerHTML = `
       <div class="empty-cart">
         Seu carrinho ainda está vazio.
@@ -955,12 +1014,15 @@ cartItems.addEventListener("click", event => {
 });
 
 function openCart() {
+  if (panel.classList.contains("open")) return;
+
   loadTurnstileApi();
   panel.classList.add("open");
   panel.setAttribute("aria-hidden", "false");
   cartFab.setAttribute("aria-expanded", "true");
   overlay.hidden = false;
   document.body.classList.add("cart-open");
+  window.MimoAnalytics?.trackViewCart(getCartAnalyticsLines());
 }
 
 let cartSwipe = null;
@@ -1091,8 +1153,34 @@ document
 
 updateDeliveryFields();
 
-form.addEventListener("input", refreshWhatsappButton);
-form.addEventListener("change", refreshWhatsappButton);
+function handleCheckoutInteraction(event) {
+  if (
+    checkoutStarted ||
+    !cart.size ||
+    !event.target.matches(`
+      #customer-name,
+      #customer-address,
+      #customer-notes,
+      input[name="delivery"],
+      input[name="payment"]
+    `)
+  ) {
+    return;
+  }
+
+  checkoutStarted = true;
+  window.MimoAnalytics?.trackBeginCheckout(getCartAnalyticsLines());
+}
+
+form.addEventListener("focusin", handleCheckoutInteraction);
+form.addEventListener("input", event => {
+  handleCheckoutInteraction(event);
+  refreshWhatsappButton();
+});
+form.addEventListener("change", event => {
+  handleCheckoutInteraction(event);
+  refreshWhatsappButton();
+});
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
@@ -1182,6 +1270,11 @@ form.addEventListener("submit", async event => {
   refreshWhatsappButton();
 
   try {
+    const analyticsIdentifiers = await (
+      window.MimoAnalytics?.getIdentifiers({ timeoutMs: 250 }) ||
+      Promise.resolve({ client_id: null, session_id: null })
+    ).catch(() => ({ client_id: null, session_id: null }));
+    const checkoutAttemptId = getCheckoutAttemptId(currentSignature);
     const functionName =
       STORE_CONFIG.orderFunctionName || "create-order";
 
@@ -1191,6 +1284,11 @@ form.addEventListener("submit", async event => {
         {
           body: {
             turnstileToken: submissionTurnstileToken,
+            checkout_attempt_id: checkoutAttemptId,
+            analytics: {
+              client_id: analyticsIdentifiers.client_id,
+              session_id: analyticsIdentifiers.session_id
+            },
             order: {
               p_customer_name: name,
               p_delivery_method: delivery,
@@ -1219,6 +1317,18 @@ form.addEventListener("submit", async event => {
 
     const orderNumber = data.order_number;
     const subtotal = Number(data.subtotal);
+    const analyticsOrderId = `MIMO-${orderNumber}`;
+
+    if (!trackedOrderCreatedIds.has(analyticsOrderId)) {
+      window.MimoAnalytics?.trackOrderCreated({
+        orderNumber,
+        subtotal,
+        lines: getCartAnalyticsLines()
+      });
+      trackedOrderCreatedIds.add(analyticsOrderId);
+    }
+
+    checkoutStarted = false;
 
     const messageItems = [...cart.entries()].map(([id, qty]) => {
       const product = getProduct(id);

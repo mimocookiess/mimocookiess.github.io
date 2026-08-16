@@ -4,5 +4,6 @@ const STORE_CONFIG = {
   storeName: "Mimo Cookies",
   pickupAddress: "Av. Frei Vicente, 485 — Aeroporto Velho — Res. Gran Ville",
   turnstileSiteKey: "0x4AAAAAAEEhvuMy7tB7ff84",
-  orderFunctionName: "create-order"
+  orderFunctionName: "create-order",
+  gaMeasurementId: "G-QYSQ9P1YRS"
 };
