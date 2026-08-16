@@ -28,6 +28,7 @@ let storeSettings = {
   pauseMessage: ""
 };
 let storeStateTimer = null;
+let productsLoadedFromSupabase = false;
 
 const TURNSTILE_ACTION = "create_order";
 const CART_SWIPE_CLOSE_THRESHOLD = 80;
@@ -658,6 +659,8 @@ async function loadProducts() {
       return FALLBACK_PRODUCTS;
     }
 
+    productsLoadedFromSupabase = true;
+
     return data.map(product => ({
       id: product.slug,
       databaseId: product.id,
@@ -781,6 +784,7 @@ function renderProducts() {
       </article>
     `;
   }).join("");
+  grid.setAttribute("aria-busy", "false");
 }
 
 grid.addEventListener("click", event => {
@@ -1258,15 +1262,18 @@ form.addEventListener("submit", async event => {
 });
 
 async function initializeStore() {
-  grid.innerHTML = `
-    <p class="loading-products">
-      Carregando cardápio...
-    </p>
-  `;
+  if (!grid.querySelector(".product-card-skeleton")) {
+    window.MimoCatalogLoading?.renderSkeletons();
+  }
 
   PRODUCTS = await loadProducts();
 
   renderProducts();
+
+  if (productsLoadedFromSupabase) {
+    window.MimoCatalogLoading?.saveProductCount(PRODUCTS.length);
+  }
+
   updateCart();
 }
 

@@ -120,7 +120,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/favicon-192x192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/favicon-512x512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <section
@@ -186,6 +186,76 @@
       </div>
 
       <div class="product-grid" id="product-grid" aria-live="polite"></div>
+      <script>
+        (() => {
+          const STORAGE_KEY = "mimo_catalog_product_count";
+          const DEFAULT_COUNT = 8;
+          const MAX_COUNT = 60;
+          const grid = document.querySelector("#product-grid");
+
+          function getEstimatedCount() {
+            try {
+              const storedCount = Number(localStorage.getItem(STORAGE_KEY));
+
+              if (
+                Number.isInteger(storedCount) &&
+                storedCount > 0 &&
+                storedCount <= MAX_COUNT
+              ) {
+                return storedCount;
+              }
+            } catch (error) {
+              console.warn("Não foi possível ler a estimativa do catálogo.", error);
+            }
+
+            return DEFAULT_COUNT;
+          }
+
+          function renderSkeletons(count = getEstimatedCount()) {
+            grid.setAttribute("aria-busy", "true");
+            grid.innerHTML = Array.from({ length: count }, () => `
+              <article class="product-card product-card-skeleton" aria-hidden="true">
+                <div class="product-image-wrap">
+                  <span class="skeleton-block skeleton-image"></span>
+                </div>
+
+                <div class="product-body">
+                  <div class="product-title-row">
+                    <span class="skeleton-block skeleton-title"></span>
+                    <span class="skeleton-block skeleton-price"></span>
+                  </div>
+
+                  <div class="skeleton-description">
+                    <span class="skeleton-block skeleton-line"></span>
+                    <span class="skeleton-block skeleton-line short"></span>
+                  </div>
+
+                  <span class="skeleton-block skeleton-button"></span>
+                </div>
+              </article>
+            `).join("");
+          }
+
+          function saveProductCount(count) {
+            if (!Number.isInteger(count) || count <= 0 || count > MAX_COUNT) {
+              return;
+            }
+
+            try {
+              localStorage.setItem(STORAGE_KEY, String(count));
+            } catch (error) {
+              console.warn("Não foi possível salvar a estimativa do catálogo.", error);
+            }
+          }
+
+          window.MimoCatalogLoading = Object.freeze({
+            renderSkeletons,
+            saveProductCount
+          });
+
+          renderSkeletons();
+        })();
+      </script>
     </section>
 
     <section class="pickup-section">
@@ -363,6 +433,6 @@
 <script src="supabase-config.js?v=1"></script>
 <script src="products.js?v=4"></script>
 <script src="store-status.js?v=1"></script>
-<script src="script.js?v=18"></script>
+<script src="script.js?v=19"></script>
 </body>
 </html>

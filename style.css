@@ -211,6 +211,12 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
   transform: translateY(-4px);
   box-shadow: var(--shadow);
 }
+.product-card-skeleton,
+.product-card-skeleton:hover {
+  pointer-events: none;
+  transform: none;
+  box-shadow: 0 8px 28px rgba(75, 33, 29, .05);
+}
 .product-image-wrap {
   position: relative;
   overflow: hidden;
@@ -219,6 +225,39 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 }
 .product-image { width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
 .product-card:hover .product-image { transform: scale(1.03); }
+.skeleton-block {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2e4ea 25%, #faeff4 50%, #f2e4ea 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+.skeleton-image {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+.product-card-skeleton .product-title-row {
+  min-height: 35px;
+  align-items: center;
+}
+.skeleton-title { width: 54%; height: 26px; }
+.skeleton-price { width: 24%; height: 20px; }
+.skeleton-description {
+  min-height: 48px;
+  margin: 10px 0 18px;
+  padding-top: 4px;
+}
+.skeleton-line { width: 100%; height: 12px; margin-bottom: 10px; }
+.skeleton-line.short { width: 72%; margin-bottom: 0; }
+.skeleton-button { width: 100%; height: 46px; border-radius: 14px; }
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; }
+}
 .status-pill {
   position: absolute;
   top: 14px;
