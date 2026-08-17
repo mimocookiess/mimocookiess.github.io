@@ -787,6 +787,7 @@ loginForm.addEventListener("submit", async event => {
 logoutButton.addEventListener("click", async () => {
   isAdminAuthenticated = false;
   stopAdminOrderSync();
+  MimoAdminReports.reset();
   await supabaseClient.auth.signOut();
   productForm.reset();
   resetProductForm();
@@ -1707,6 +1708,7 @@ supabaseClient.auth.onAuthStateChange(event => {
   if (event === "SIGNED_OUT") {
     isAdminAuthenticated = false;
     stopAdminOrderSync();
+    MimoAdminReports.reset();
     showLogin();
   }
 });
@@ -2061,6 +2063,7 @@ orderStatusFilters.addEventListener("click", event => {
 
 updateOrderStatusFilterControls();
 updateOrderAlertsControl();
+MimoAdminReports.init({ client: supabaseClient });
 
 if (orderAlertsEnabled) {
   document.addEventListener("pointerdown", prepareOrderAlertAudio, {
@@ -2087,6 +2090,8 @@ function selectAdminTab(selectedTab) {
     loadOrders({ showLoading: false });
   } else if (selectedTab === "settings") {
     loadStoreSettings();
+  } else if (selectedTab === "reports") {
+    MimoAdminReports.load();
   }
 }
 

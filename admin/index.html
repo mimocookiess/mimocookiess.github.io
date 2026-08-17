@@ -470,12 +470,237 @@
         hidden
       >
         <section class="panel reports-panel">
-          <div class="reports-empty-state">
-            <p class="eyebrow">Relatórios</p>
-            <h2>Em breve</h2>
-            <p class="muted">
-              Os relatórios da loja estarão disponíveis aqui.
-            </p>
+          <div class="reports-header">
+            <div>
+              <p class="eyebrow">Relatórios</p>
+              <h2>Visão geral da loja</h2>
+              <p class="muted">
+                Indicadores dos pedidos realizados no período selecionado.
+              </p>
+            </div>
+
+            <button
+              class="secondary-button"
+              id="refresh-reports-button"
+              type="button"
+            >
+              Atualizar
+            </button>
+          </div>
+
+          <form class="reports-period" id="reports-period-form">
+            <fieldset>
+              <legend>Período dos relatórios</legend>
+              <div class="reports-period-options">
+                <button type="button" data-report-period="today">Hoje</button>
+                <button type="button" data-report-period="7days">7 dias</button>
+                <button
+                  class="active"
+                  type="button"
+                  data-report-period="30days"
+                  aria-pressed="true"
+                >
+                  30 dias
+                </button>
+                <button type="button" data-report-period="month">
+                  Este mês
+                </button>
+                <button type="button" data-report-period="custom">
+                  Personalizado
+                </button>
+              </div>
+            </fieldset>
+
+            <div class="reports-custom-period" id="reports-custom-period" hidden>
+              <label>
+                Data inicial
+                <input id="reports-start-date" type="date" required>
+              </label>
+              <label>
+                Data final
+                <input id="reports-end-date" type="date" required>
+              </label>
+              <button type="submit">Aplicar período</button>
+            </div>
+          </form>
+
+          <p class="reports-period-label muted" id="reports-period-label"></p>
+
+          <div
+            class="reports-status"
+            id="reports-status"
+            role="status"
+            aria-live="polite"
+          >
+            <div class="reports-loading" aria-hidden="true"></div>
+            <p>Carregando indicadores...</p>
+          </div>
+
+          <div id="reports-content" hidden>
+            <section aria-labelledby="reports-overview-title">
+              <div class="reports-section-heading">
+                <div>
+                  <p class="eyebrow">Visão geral</p>
+                  <h3 id="reports-overview-title">Resultados do período</h3>
+                </div>
+              </div>
+
+              <div class="reports-kpi-grid">
+                <article class="report-kpi">
+                  <span>Faturamento</span>
+                  <strong id="report-revenue">R$ 0,00</strong>
+                  <small>Total dos pedidos, incluindo entrega</small>
+                </article>
+                <article class="report-kpi">
+                  <span>Pedidos</span>
+                  <strong id="report-orders">0</strong>
+                  <small>Pedidos concluídos</small>
+                </article>
+                <article class="report-kpi">
+                  <span>Ticket médio</span>
+                  <strong id="report-ticket">R$ 0,00</strong>
+                  <small>Faturamento por pedido concluído</small>
+                </article>
+                <article class="report-kpi">
+                  <span>Cookies vendidos</span>
+                  <strong id="report-cookies">0</strong>
+                  <small>Unidades em pedidos concluídos</small>
+                </article>
+              </div>
+
+              <div class="reports-secondary-metrics">
+                <p>
+                  <span>Cookies por pedido</span>
+                  <strong id="report-cookies-per-order">0,00</strong>
+                </p>
+                <p>
+                  <span>Valor médio por cookie</span>
+                  <strong id="report-average-cookie">R$ 0,00</strong>
+                </p>
+                <p>
+                  <span>Receita de produtos</span>
+                  <strong id="report-product-revenue">R$ 0,00</strong>
+                </p>
+                <p>
+                  <span>Taxas de entrega</span>
+                  <strong id="report-delivery-fees">R$ 0,00</strong>
+                </p>
+              </div>
+            </section>
+
+            <section class="report-card" aria-labelledby="sales-evolution-title">
+              <div class="reports-section-heading report-card-heading">
+                <div>
+                  <p class="eyebrow">Evolução temporal</p>
+                  <h3 id="sales-evolution-title">Vendas ao longo do período</h3>
+                </div>
+                <div class="report-chart-toggle" role="group" aria-label="Métrica do gráfico">
+                  <button
+                    class="active"
+                    type="button"
+                    data-report-chart="revenue"
+                    aria-pressed="true"
+                  >
+                    Faturamento
+                  </button>
+                  <button type="button" data-report-chart="orders">
+                    Pedidos
+                  </button>
+                </div>
+              </div>
+              <div class="report-line-chart" id="report-sales-chart"></div>
+            </section>
+
+            <section class="report-card" aria-labelledby="products-report-title">
+              <div class="reports-section-heading report-card-heading">
+                <div>
+                  <p class="eyebrow">Produtos</p>
+                  <h3 id="products-report-title">Sabores mais vendidos</h3>
+                </div>
+              </div>
+              <div class="report-table-wrap">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Produto</th>
+                      <th scope="col">Unidades</th>
+                      <th scope="col">Pedidos</th>
+                      <th scope="col">Receita</th>
+                      <th scope="col">% unidades</th>
+                      <th scope="col">% receita</th>
+                    </tr>
+                  </thead>
+                  <tbody id="report-products-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="reports-two-column">
+              <section class="report-card" aria-labelledby="weekday-report-title">
+                <div class="reports-section-heading report-card-heading">
+                  <div>
+                    <p class="eyebrow">Demanda</p>
+                    <h3 id="weekday-report-title">Dia da semana</h3>
+                  </div>
+                </div>
+                <div class="report-bar-list" id="report-weekdays"></div>
+              </section>
+
+              <section class="report-card" aria-labelledby="fulfillment-report-title">
+                <div class="reports-section-heading report-card-heading">
+                  <div>
+                    <p class="eyebrow">Operação</p>
+                    <h3 id="fulfillment-report-title">Entrega × retirada</h3>
+                  </div>
+                </div>
+                <div class="report-table-wrap">
+                  <table class="report-table report-table-compact">
+                    <thead>
+                      <tr>
+                        <th scope="col">Modalidade</th>
+                        <th scope="col">Pedidos</th>
+                        <th scope="col">%</th>
+                        <th scope="col">Receita</th>
+                        <th scope="col">Ticket médio</th>
+                      </tr>
+                    </thead>
+                    <tbody id="report-fulfillment-body"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <section class="report-card" aria-labelledby="hours-report-title">
+              <div class="reports-section-heading report-card-heading">
+                <div>
+                  <p class="eyebrow">Demanda</p>
+                  <h3 id="hours-report-title">Horário dos pedidos</h3>
+                  <p class="muted">Horário em que o pedido foi realizado.</p>
+                </div>
+              </div>
+              <div class="report-hours-grid" id="report-hours"></div>
+            </section>
+
+            <section class="report-cancellation" aria-labelledby="cancellation-report-title">
+              <div>
+                <p class="eyebrow">Cancelamentos</p>
+                <h3 id="cancellation-report-title">Resultado dos pedidos encerrados</h3>
+              </div>
+              <dl>
+                <div>
+                  <dt>Concluídos</dt>
+                  <dd id="report-completed">0</dd>
+                </div>
+                <div>
+                  <dt>Cancelados</dt>
+                  <dd id="report-cancelled">0</dd>
+                </div>
+                <div>
+                  <dt>Taxa de cancelamento</dt>
+                  <dd id="report-cancellation-rate">0,00%</dd>
+                </div>
+              </dl>
+            </section>
           </div>
         </section>
       </section>
@@ -488,6 +713,7 @@
   <script src="../supabase-config.js?v=1"></script>
   <script src="../store-status.js?v=1"></script>
   <script src="image-optimizer.js?v=1"></script>
-  <script src="admin.js?v=15"></script>
+  <script src="reports.js?v=1"></script>
+  <script src="admin.js?v=16"></script>
 </body>
 </html>
