@@ -1,0 +1,4 @@
+project_id = "mimo-cookies-local-baseline"
+
+[db.seed]
+enabled = false

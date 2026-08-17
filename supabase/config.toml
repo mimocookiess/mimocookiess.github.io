@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.notify-new-order]
 verify_jwt = false
+
+[functions.process-ga4-purchases]
+verify_jwt = false
