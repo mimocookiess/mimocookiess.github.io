@@ -182,6 +182,38 @@
       `${formatDecimal(summary.cancellation_rate)}%`;
   }
 
+  function getRepresentativeIndexes(length, maximumLabels = 5) {
+    if (length <= 0) return [];
+    if (length <= maximumLabels) {
+      return Array.from({ length }, (_, index) => index);
+    }
+
+    return [...new Set(Array.from({ length: maximumLabels }, (_, index) =>
+      Math.round((index / (maximumLabels - 1)) * (length - 1))
+    ))];
+  }
+
+  function buildChartSummary(data, metric) {
+    if (!data.length || data.every(item => asNumber(item[metric]) === 0)) {
+      return "Sem vendas concluídas no período.";
+    }
+
+    const values = data.map(item => asNumber(item[metric]));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const peakValue = Math.max(...values);
+    const peakIndex = values.indexOf(peakValue);
+    const metricLabel = metric === "revenue" ? "faturamento" : "pedidos";
+    const totalLabel = metric === "revenue"
+      ? formatCurrency(total)
+      : `${formatNumber(total)} pedidos`;
+    const peakLabel = metric === "revenue"
+      ? formatCurrency(peakValue)
+      : `${formatNumber(peakValue)} pedidos`;
+
+    return `Total de ${metricLabel}: ${totalLabel}. Maior valor em ` +
+      `${formatDate(data[peakIndex].date)}: ${peakLabel}.`;
+  }
+
   function buildLineChart(data, metric) {
     if (!data.length || data.every(item => asNumber(item[metric]) === 0)) {
       return '<p class="report-empty">Não há vendas concluídas neste período.</p>';
@@ -203,7 +235,7 @@
       .join(" ");
     const areaPoints = `${padding.left},${padding.top + plotHeight} ${points} ` +
       `${padding.left + plotWidth},${padding.top + plotHeight}`;
-    const grid = [0, 0.5, 1].map(ratio => {
+    const grid = [0, 0.33, 0.66, 1].map(ratio => {
       const y = padding.top + plotHeight - ratio * plotHeight;
       const labelValue = maximum * ratio;
       const label = metric === "revenue"
@@ -213,20 +245,29 @@
       return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" />` +
         `<text x="${padding.left - 10}" y="${y + 4}" text-anchor="end">${escapeHtml(label)}</text>`;
     }).join("");
-    const labelIndexes = [...new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])];
+    const labelIndexes = getRepresentativeIndexes(data.length);
     const labels = labelIndexes.map(index =>
       `<text x="${xFor(index)}" y="${height - 13}" text-anchor="middle">` +
       `${escapeHtml(formatDate(data[index].date))}</text>`
     ).join("");
-    const dots = data.map((item, index) => {
+    const peakIndex = values.indexOf(Math.max(...values));
+    const pointIndexes = data.length <= 10
+      ? data.map((_, index) => index)
+      : [...new Set([...labelIndexes, peakIndex])];
+    const dots = pointIndexes.map(index => {
+      const item = data[index];
       const value = asNumber(item[metric]);
       const label = metric === "revenue" ? formatCurrency(value) : formatNumber(value);
       return `<circle cx="${xFor(index)}" cy="${yFor(value)}" r="4">` +
         `<title>${escapeHtml(`${formatDate(item.date)}: ${label}`)}</title></circle>`;
     }).join("");
 
+    const accessibleSummary = buildChartSummary(data, metric);
+
     return `<svg viewBox="0 0 ${width} ${height}" role="img" ` +
-      `aria-label="${metric === "revenue" ? "Faturamento" : "Pedidos"} por dia">` +
+      `aria-labelledby="report-chart-title report-chart-description">` +
+      `<title id="report-chart-title">${metric === "revenue" ? "Faturamento" : "Pedidos"} por dia</title>` +
+      `<desc id="report-chart-description">${escapeHtml(accessibleSummary)}</desc>` +
       `<g class="report-chart-grid">${grid}${labels}</g>` +
       `<polygon class="report-chart-area" points="${areaPoints}" />` +
       `<polyline class="report-chart-line" points="${points}" />` +
@@ -234,31 +275,42 @@
   }
 
   function renderSalesChart() {
-    elements.salesChart.innerHTML = buildLineChart(reportData?.daily || [], chartMetric);
+    const daily = reportData?.daily || [];
+    elements.salesChart.innerHTML = buildLineChart(daily, chartMetric);
+    if (elements.chartSummary) {
+      elements.chartSummary.textContent = buildChartSummary(daily, chartMetric);
+    }
   }
 
   function renderProducts(products) {
     if (!products.length) {
       elements.productsBody.innerHTML =
-        '<tr><td class="report-table-empty" colspan="6">Nenhum produto vendido no período.</td></tr>';
+        '<p class="report-empty report-empty-compact">Nenhum produto vendido no período.</p>';
       return;
     }
 
-    elements.productsBody.innerHTML = products.map(product => `
-      <tr>
-        <th scope="row" data-label="Produto">${escapeHtml(product.name)}</th>
-        <td data-label="Unidades">${formatNumber(product.units)}</td>
-        <td data-label="Pedidos">${formatNumber(product.orders)}</td>
-        <td data-label="Receita">${escapeHtml(formatCurrency(product.revenue))}</td>
-        <td data-label="% unidades">
-          <span class="report-share-value">${formatDecimal(product.unit_share)}%</span>
-          <span class="report-share-bar"><i style="width:${Math.min(100, asNumber(product.unit_share))}%"></i></span>
-        </td>
-        <td data-label="% receita">
-          <span class="report-share-value">${formatDecimal(product.revenue_share)}%</span>
-          <span class="report-share-bar"><i style="width:${Math.min(100, asNumber(product.revenue_share))}%"></i></span>
-        </td>
-      </tr>
+    elements.productsBody.innerHTML = products.map((product, index) => `
+      <article class="report-product" role="listitem">
+        <span class="report-product-rank" aria-label="${index + 1}º lugar">${index + 1}</span>
+        <div class="report-product-details">
+          <div class="report-product-heading">
+            <strong>${escapeHtml(product.name)}</strong>
+            <strong>${escapeHtml(formatCurrency(product.revenue))}</strong>
+          </div>
+          <p>${formatNumber(product.units)} unidades · ${formatNumber(product.orders)} pedidos</p>
+          <div class="report-product-share">
+            <span
+              class="report-product-track"
+              role="img"
+              aria-label="${formatDecimal(product.unit_share)}% das unidades vendidas"
+            >
+              <i style="width:${Math.min(100, asNumber(product.unit_share))}%"></i>
+            </span>
+            <span>${formatDecimal(product.unit_share)}%</span>
+          </div>
+          <small>${formatDecimal(product.revenue_share)}% do faturamento de produtos</small>
+        </div>
+      </article>
     `).join("");
   }
 
@@ -270,11 +322,17 @@
       const width = (orders / maximum) * 100;
       const label = WEEKDAY_LABELS[asNumber(day.weekday) - 1] || "Dia";
 
+      const orderLabel = `${formatNumber(orders)} ${orders === 1 ? "pedido" : "pedidos"}`;
+
       return `<div class="report-bar-row">
-        <span>${escapeHtml(label)}</span>
-        <div class="report-bar-track"><i style="width:${width}%"></i></div>
-        <strong>${formatNumber(orders)}</strong>
-        <small>${escapeHtml(formatCurrency(day.revenue))}</small>
+        <div class="report-bar-label">
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(formatCurrency(day.revenue))}</small>
+        </div>
+        <div class="report-bar-track" role="img" aria-label="${escapeHtml(orderLabel)}">
+          <i style="width:${width}%"></i>
+        </div>
+        <span>${escapeHtml(orderLabel)}</span>
       </div>`;
     }).join("");
   }
@@ -286,11 +344,13 @@
       const orders = asNumber(hour.orders);
       const level = orders / maximum;
 
+      const orderLabel = `${formatNumber(orders)} ${orders === 1 ? "pedido" : "pedidos"}`;
+      const accessibleLabel = `${pad(asNumber(hour.hour))} horas: ${orderLabel}, ${formatCurrency(hour.revenue)}`;
+
       return `<article class="report-hour" style="--hour-level:${level.toFixed(3)}" ` +
-        `title="${escapeHtml(`${formatNumber(orders)} pedido(s) · ${formatCurrency(hour.revenue)}`)}">` +
+        `aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}">` +
         `<strong>${pad(asNumber(hour.hour))}h</strong>` +
-        `<span>${formatNumber(orders)} ped.</span>` +
-        `<small>${escapeHtml(formatCurrency(hour.revenue))}</small>` +
+        `<span>${orders === 0 ? "—" : `${formatNumber(orders)} ped.`}</span>` +
         `</article>`;
     }).join("");
   }
@@ -298,18 +358,25 @@
   function renderFulfillment(rows) {
     if (!rows.length) {
       elements.fulfillmentBody.innerHTML =
-        '<tr><td class="report-table-empty" colspan="5">Sem pedidos concluídos no período.</td></tr>';
+        '<p class="report-empty report-empty-compact">Sem pedidos concluídos no período.</p>';
       return;
     }
 
     elements.fulfillmentBody.innerHTML = rows.map(row => `
-      <tr>
-        <th scope="row" data-label="Modalidade">${escapeHtml(row.method)}</th>
-        <td data-label="Pedidos">${formatNumber(row.orders)}</td>
-        <td data-label="%">${formatDecimal(row.order_share)}%</td>
-        <td data-label="Receita">${escapeHtml(formatCurrency(row.revenue))}</td>
-        <td data-label="Ticket médio">${escapeHtml(formatCurrency(row.ticket_average))}</td>
-      </tr>
+      <article class="report-fulfillment" role="listitem">
+        <div class="report-fulfillment-heading">
+          <h4>${escapeHtml(row.method)}</h4>
+          <strong>${formatDecimal(row.order_share)}%</strong>
+        </div>
+        <p><strong>${formatNumber(row.orders)}</strong> pedidos</p>
+        <div class="report-fulfillment-track" role="img" aria-label="${formatDecimal(row.order_share)}% dos pedidos">
+          <i style="width:${Math.min(100, asNumber(row.order_share))}%"></i>
+        </div>
+        <dl>
+          <div><dt>Faturamento</dt><dd>${escapeHtml(formatCurrency(row.revenue))}</dd></div>
+          <div><dt>Ticket médio</dt><dd>${escapeHtml(formatCurrency(row.ticket_average))}</dd></div>
+        </dl>
+      </article>
     `).join("");
   }
 
@@ -337,7 +404,8 @@
     const sequence = ++loadSequence;
     elements.content.hidden = true;
     elements.refreshButton.disabled = true;
-    elements.periodLabel.textContent = `Período: ${formatPeriod(range)} · ${STORE_TIME_ZONE}`;
+    elements.periodLabel.textContent = `Período: ${formatPeriod(range)}`;
+    elements.periodLabel.title = `Datas consideradas no fuso ${STORE_TIME_ZONE}`;
     setStatus("loading", "Carregando indicadores...");
 
     const { data, error } = await client.rpc("get_admin_reports", {
@@ -443,6 +511,7 @@
       cancelled: document.querySelector("#report-cancelled"),
       cancellationRate: document.querySelector("#report-cancellation-rate"),
       salesChart: document.querySelector("#report-sales-chart"),
+      chartSummary: document.querySelector("#report-sales-summary"),
       productsBody: document.querySelector("#report-products-body"),
       weekdays: document.querySelector("#report-weekdays"),
       hours: document.querySelector("#report-hours"),

@@ -470,59 +470,57 @@
         hidden
       >
         <section class="panel reports-panel">
-          <div class="reports-header">
-            <div>
+          <header class="reports-header">
+            <div class="reports-title">
               <p class="eyebrow">Relatórios</p>
-              <h2>Visão geral da loja</h2>
-              <p class="muted">
-                Indicadores dos pedidos realizados no período selecionado.
-              </p>
+              <h2>Resultados da loja</h2>
+              <p class="muted">Uma leitura rápida das vendas e da operação.</p>
             </div>
 
+            <form class="reports-period" id="reports-period-form">
+              <fieldset>
+                <legend>Período dos relatórios</legend>
+                <div class="reports-period-options">
+                  <button type="button" data-report-period="today">Hoje</button>
+                  <button type="button" data-report-period="7days">7 dias</button>
+                  <button
+                    class="active"
+                    type="button"
+                    data-report-period="30days"
+                    aria-pressed="true"
+                  >
+                    30 dias
+                  </button>
+                  <button type="button" data-report-period="month">
+                    Este mês
+                  </button>
+                  <button type="button" data-report-period="custom">
+                    Personalizado
+                  </button>
+                </div>
+              </fieldset>
+
+              <div class="reports-custom-period" id="reports-custom-period" hidden>
+                <label>
+                  Data inicial
+                  <input id="reports-start-date" type="date" required>
+                </label>
+                <label>
+                  Data final
+                  <input id="reports-end-date" type="date" required>
+                </label>
+                <button type="submit">Aplicar período</button>
+              </div>
+            </form>
+
             <button
-              class="secondary-button"
+              class="secondary-button reports-refresh"
               id="refresh-reports-button"
               type="button"
             >
               Atualizar
             </button>
-          </div>
-
-          <form class="reports-period" id="reports-period-form">
-            <fieldset>
-              <legend>Período dos relatórios</legend>
-              <div class="reports-period-options">
-                <button type="button" data-report-period="today">Hoje</button>
-                <button type="button" data-report-period="7days">7 dias</button>
-                <button
-                  class="active"
-                  type="button"
-                  data-report-period="30days"
-                  aria-pressed="true"
-                >
-                  30 dias
-                </button>
-                <button type="button" data-report-period="month">
-                  Este mês
-                </button>
-                <button type="button" data-report-period="custom">
-                  Personalizado
-                </button>
-              </div>
-            </fieldset>
-
-            <div class="reports-custom-period" id="reports-custom-period" hidden>
-              <label>
-                Data inicial
-                <input id="reports-start-date" type="date" required>
-              </label>
-              <label>
-                Data final
-                <input id="reports-end-date" type="date" required>
-              </label>
-              <button type="submit">Aplicar período</button>
-            </div>
-          </form>
+          </header>
 
           <p class="reports-period-label muted" id="reports-period-label"></p>
 
@@ -549,7 +547,7 @@
                 <article class="report-kpi">
                   <span>Faturamento</span>
                   <strong id="report-revenue">R$ 0,00</strong>
-                  <small>Total dos pedidos, incluindo entrega</small>
+                  <small>Total dos pedidos concluídos</small>
                 </article>
                 <article class="report-kpi">
                   <span>Pedidos</span>
@@ -588,118 +586,117 @@
               </div>
             </section>
 
-            <section class="report-card" aria-labelledby="sales-evolution-title">
-              <div class="reports-section-heading report-card-heading">
-                <div>
-                  <p class="eyebrow">Evolução temporal</p>
-                  <h3 id="sales-evolution-title">Vendas ao longo do período</h3>
-                </div>
-                <div class="report-chart-toggle" role="group" aria-label="Métrica do gráfico">
-                  <button
-                    class="active"
-                    type="button"
-                    data-report-chart="revenue"
-                    aria-pressed="true"
-                  >
-                    Faturamento
-                  </button>
-                  <button type="button" data-report-chart="orders">
-                    Pedidos
-                  </button>
-                </div>
-              </div>
-              <div class="report-line-chart" id="report-sales-chart"></div>
-            </section>
-
-            <section class="report-card" aria-labelledby="products-report-title">
-              <div class="reports-section-heading report-card-heading">
-                <div>
-                  <p class="eyebrow">Produtos</p>
-                  <h3 id="products-report-title">Sabores mais vendidos</h3>
-                </div>
-              </div>
-              <div class="report-table-wrap">
-                <table class="report-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Produto</th>
-                      <th scope="col">Unidades</th>
-                      <th scope="col">Pedidos</th>
-                      <th scope="col">Receita</th>
-                      <th scope="col">% unidades</th>
-                      <th scope="col">% receita</th>
-                    </tr>
-                  </thead>
-                  <tbody id="report-products-body"></tbody>
-                </table>
-              </div>
-            </section>
-
-            <div class="reports-two-column">
-              <section class="report-card" aria-labelledby="weekday-report-title">
+            <div class="reports-primary-grid">
+              <section class="report-card report-sales-card" aria-labelledby="sales-evolution-title">
                 <div class="reports-section-heading report-card-heading">
                   <div>
-                    <p class="eyebrow">Demanda</p>
-                    <h3 id="weekday-report-title">Dia da semana</h3>
+                    <p class="eyebrow">Vendas</p>
+                    <h3 id="sales-evolution-title">Ao longo do período</h3>
+                  </div>
+                  <div class="report-chart-toggle" role="group" aria-label="Métrica do gráfico">
+                    <button
+                      class="active"
+                      type="button"
+                      data-report-chart="revenue"
+                      aria-pressed="true"
+                    >
+                      Faturamento
+                    </button>
+                    <button type="button" data-report-chart="orders" aria-pressed="false">
+                      Pedidos
+                    </button>
                   </div>
                 </div>
-                <div class="report-bar-list" id="report-weekdays"></div>
+                <div class="report-line-chart" id="report-sales-chart"></div>
+                <p class="report-chart-summary muted" id="report-sales-summary"></p>
               </section>
 
-              <section class="report-card" aria-labelledby="fulfillment-report-title">
+              <section class="report-card report-products-card" aria-labelledby="products-report-title">
                 <div class="reports-section-heading report-card-heading">
                   <div>
-                    <p class="eyebrow">Operação</p>
-                    <h3 id="fulfillment-report-title">Entrega × retirada</h3>
+                    <p class="eyebrow">Produtos</p>
+                    <h3 id="products-report-title">Mais vendidos</h3>
                   </div>
                 </div>
-                <div class="report-table-wrap">
-                  <table class="report-table report-table-compact">
-                    <thead>
-                      <tr>
-                        <th scope="col">Modalidade</th>
-                        <th scope="col">Pedidos</th>
-                        <th scope="col">%</th>
-                        <th scope="col">Receita</th>
-                        <th scope="col">Ticket médio</th>
-                      </tr>
-                    </thead>
-                    <tbody id="report-fulfillment-body"></tbody>
-                  </table>
-                </div>
+                <div
+                  class="report-product-ranking"
+                  id="report-products-body"
+                  role="list"
+                ></div>
               </section>
             </div>
 
-            <section class="report-card" aria-labelledby="hours-report-title">
-              <div class="reports-section-heading report-card-heading">
-                <div>
-                  <p class="eyebrow">Demanda</p>
-                  <h3 id="hours-report-title">Horário dos pedidos</h3>
-                  <p class="muted">Horário em que o pedido foi realizado.</p>
-                </div>
+            <section class="reports-group" aria-labelledby="demand-report-title">
+              <div class="reports-group-heading">
+                <p class="eyebrow">Demanda</p>
+                <h3 id="demand-report-title">Quando os pedidos acontecem</h3>
               </div>
-              <div class="report-hours-grid" id="report-hours"></div>
+
+              <div class="reports-demand-grid">
+                <section class="report-card" aria-labelledby="weekday-report-title">
+                  <div class="reports-section-heading report-card-heading">
+                    <div>
+                      <h3 id="weekday-report-title">Dia da semana</h3>
+                      <p class="muted">Volume e faturamento por dia.</p>
+                    </div>
+                  </div>
+                  <div class="report-bar-list" id="report-weekdays"></div>
+                </section>
+
+                <section class="report-card report-hours-card" aria-labelledby="hours-report-title">
+                  <div class="reports-section-heading report-card-heading">
+                    <div>
+                      <h3 id="hours-report-title">Horário dos pedidos</h3>
+                      <p class="muted">Quanto mais intensa a célula, maior o movimento.</p>
+                    </div>
+                  </div>
+                  <div class="report-hours-grid" id="report-hours"></div>
+                </section>
+              </div>
             </section>
 
-            <section class="report-cancellation" aria-labelledby="cancellation-report-title">
-              <div>
-                <p class="eyebrow">Cancelamentos</p>
-                <h3 id="cancellation-report-title">Resultado dos pedidos encerrados</h3>
+            <section class="reports-group" aria-labelledby="operation-report-title">
+              <div class="reports-group-heading">
+                <p class="eyebrow">Operação</p>
+                <h3 id="operation-report-title">Entrega, retirada e cancelamentos</h3>
               </div>
-              <dl>
-                <div>
-                  <dt>Concluídos</dt>
-                  <dd id="report-completed">0</dd>
-                </div>
-                <div>
-                  <dt>Cancelados</dt>
-                  <dd id="report-cancelled">0</dd>
-                </div>
-                <div>
-                  <dt>Taxa de cancelamento</dt>
-                  <dd id="report-cancellation-rate">0,00%</dd>
-                </div>
-              </dl>
+
+              <div class="reports-operation-grid">
+                <section class="report-card" aria-labelledby="fulfillment-report-title">
+                  <div class="reports-section-heading report-card-heading">
+                    <div>
+                      <h3 id="fulfillment-report-title">Entrega × retirada</h3>
+                      <p class="muted">Comparativo dos pedidos concluídos.</p>
+                    </div>
+                  </div>
+                  <div
+                    class="report-fulfillment-grid"
+                    id="report-fulfillment-body"
+                    role="list"
+                  ></div>
+                </section>
+
+                <section class="report-cancellation" aria-labelledby="cancellation-report-title">
+                  <div>
+                    <p class="eyebrow">Cancelamentos</p>
+                    <h3 id="cancellation-report-title">Pedidos encerrados</h3>
+                  </div>
+                  <dl>
+                    <div class="report-outcome completed">
+                      <dt>Concluídos</dt>
+                      <dd id="report-completed">0</dd>
+                    </div>
+                    <div class="report-outcome cancelled">
+                      <dt>Cancelados</dt>
+                      <dd id="report-cancelled">0</dd>
+                    </div>
+                    <div class="report-outcome rate">
+                      <dt>Taxa de cancelamento</dt>
+                      <dd id="report-cancellation-rate">0,00%</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
             </section>
           </div>
         </section>

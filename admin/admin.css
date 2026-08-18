@@ -815,6 +815,472 @@ button:disabled {
   font-weight: 700;
 }
 
+/* Reports reading experience */
+.reports-header {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
+  align-items: end;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.reports-title .muted {
+  max-width: 390px;
+  margin: 7px 0 0;
+}
+
+.reports-period {
+  min-width: 0;
+  margin: 0;
+}
+
+.reports-period-options,
+.report-chart-toggle {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--cream);
+}
+
+.reports-period-options button,
+.report-chart-toggle button {
+  border-color: transparent;
+  background: transparent;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.reports-period-options button:focus-visible,
+.report-chart-toggle button:focus-visible,
+.reports-refresh:focus-visible {
+  outline: 3px solid rgba(149, 101, 85, 0.35);
+  outline-offset: 2px;
+}
+
+.reports-custom-period {
+  margin-top: 10px;
+}
+
+.reports-refresh {
+  min-height: 42px;
+  padding-inline: 16px;
+}
+
+.reports-period-label {
+  margin-top: 9px;
+}
+
+#reports-content {
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.reports-group {
+  display: grid;
+  gap: 12px;
+}
+
+.reports-group-heading h3 {
+  font-size: 1.5rem;
+}
+
+.reports-group-heading .eyebrow {
+  margin-bottom: 4px;
+}
+
+.reports-kpi-grid {
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.report-kpi {
+  min-height: 134px;
+  padding: 18px;
+  background: var(--white);
+  box-shadow: 0 8px 24px rgba(75, 43, 32, 0.05);
+}
+
+.report-kpi span {
+  color: var(--brown-soft);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.report-kpi strong {
+  margin: 10px 0 7px;
+  font-size: clamp(1.55rem, 2.5vw, 2.15rem);
+}
+
+.report-kpi small {
+  font-size: 0.78rem;
+}
+
+.reports-secondary-metrics {
+  margin-top: 10px;
+  border-radius: 14px;
+}
+
+.reports-secondary-metrics p {
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.report-card {
+  padding: 20px;
+  border-radius: 18px;
+  box-shadow: 0 8px 28px rgba(75, 43, 32, 0.045);
+}
+
+.report-card-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.report-card-heading .muted {
+  margin-top: 5px;
+  font-size: 0.8rem;
+}
+
+.reports-primary-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.report-sales-card {
+  min-width: 0;
+}
+
+.report-line-chart {
+  min-height: 245px;
+  padding: 8px 4px 0;
+  border-radius: 14px;
+  background: var(--cream);
+}
+
+.report-line-chart svg {
+  min-height: 235px;
+}
+
+.report-chart-grid line {
+  stroke: #eadfd9;
+}
+
+.report-chart-area {
+  fill: rgba(246, 217, 213, 0.42);
+}
+
+.report-chart-line {
+  stroke-width: 3.5;
+}
+
+.report-chart-dots circle {
+  r: 3px;
+}
+
+.report-chart-summary {
+  margin: 10px 4px 0;
+  font-size: 0.76rem;
+}
+
+.report-product-ranking {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 20px;
+}
+
+.report-product {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 11px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-product:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.report-product-rank {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--cream);
+  color: var(--brown);
+  font-size: 0.78rem;
+  font-weight: 800;
+  place-items: center;
+}
+
+.report-product:first-child .report-product-rank {
+  background: var(--pink);
+}
+
+.report-product-details,
+.report-product-heading {
+  min-width: 0;
+}
+
+.report-product-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--brown-dark);
+  font-size: 0.9rem;
+}
+
+.report-product-heading strong:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-product-heading strong:last-child {
+  flex: 0 0 auto;
+}
+
+.report-product p,
+.report-product small {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.report-product-share {
+  display: grid;
+  grid-template-columns: minmax(50px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--brown);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.report-product-track,
+.report-fulfillment-track {
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pink);
+}
+
+.report-product-track i,
+.report-fulfillment-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brown);
+}
+
+.reports-demand-grid {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.85fr) minmax(0, 1.4fr);
+  gap: 18px;
+}
+
+.report-bar-list {
+  gap: 14px;
+}
+
+.report-bar-row {
+  grid-template-columns: 88px minmax(70px, 1fr) 72px;
+  gap: 10px;
+}
+
+.report-bar-label {
+  display: grid;
+  gap: 2px;
+}
+
+.report-bar-label strong {
+  color: var(--brown-dark);
+  font-size: 0.78rem;
+}
+
+.report-bar-label small {
+  color: var(--muted);
+  font-size: 0.67rem;
+}
+
+.report-bar-row > span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.report-bar-track {
+  height: 9px;
+}
+
+.report-hours-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.report-hour {
+  min-height: 62px;
+  align-content: center;
+  justify-items: start;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 11px;
+}
+
+.report-hour::before {
+  background: var(--brown);
+  opacity: calc(0.035 + var(--hour-level) * 0.3);
+}
+
+.report-hour strong {
+  font-size: 0.85rem;
+}
+
+.report-hour span {
+  color: var(--brown-soft);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.reports-operation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  gap: 18px;
+}
+
+.report-fulfillment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-fulfillment {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--cream);
+}
+
+.report-fulfillment-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-fulfillment h4,
+.report-fulfillment p {
+  margin: 0;
+}
+
+.report-fulfillment h4 {
+  color: var(--brown-dark);
+  font-size: 0.95rem;
+}
+
+.report-fulfillment-heading > strong {
+  color: var(--brown);
+  font-size: 1.1rem;
+}
+
+.report-fulfillment > p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.report-fulfillment > p strong {
+  color: var(--brown-dark);
+  font-size: 1.25rem;
+}
+
+.report-fulfillment-track {
+  margin: 10px 0 14px;
+}
+
+.report-fulfillment dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.report-fulfillment dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.report-fulfillment dt {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.report-fulfillment dd {
+  margin: 0;
+  color: var(--brown-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.report-cancellation {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 20px;
+  background: var(--white);
+  box-shadow: 0 8px 28px rgba(75, 43, 32, 0.045);
+}
+
+.report-cancellation dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-cancellation dl div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.report-cancellation .completed {
+  background: #d8eee7;
+}
+
+.report-cancellation .cancelled {
+  background: #f5d4d4;
+}
+
+.report-cancellation .rate {
+  background: var(--pink);
+}
+
+.report-cancellation dt {
+  line-height: 1.25;
+}
+
+.report-cancellation dd {
+  margin-top: 6px;
+  font-size: 1.2rem;
+}
+
+.report-cancellation .completed dd {
+  color: #226852;
+}
+
+.report-cancellation .cancelled dd {
+  color: #982e2e;
+}
+
+.report-empty-compact {
+  min-height: 120px;
+}
+
 .orders-list {
   display: grid;
   gap: 16px;
@@ -1388,6 +1854,138 @@ button:disabled {
     grid-template-columns: repeat(3, 1fr);
     justify-content: stretch;
     gap: 12px;
+  }
+}
+
+@media (max-width: 980px) {
+  .reports-header {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .reports-title {
+    grid-column: 1 / -1;
+  }
+
+  .reports-demand-grid,
+  .reports-operation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-product-ranking {
+    grid-template-columns: 1fr;
+  }
+
+  .report-product:nth-last-child(2) {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .report-hours-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .reports-header {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .reports-title,
+  .reports-period,
+  .reports-refresh {
+    grid-column: 1;
+    width: 100%;
+  }
+
+  .reports-period-options,
+  .report-chart-toggle {
+    border-radius: 16px;
+  }
+
+  .reports-kpi-grid,
+  .reports-secondary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-kpi {
+    min-height: 138px;
+    padding: 15px;
+  }
+
+  .report-kpi strong {
+    font-size: clamp(1.35rem, 7vw, 1.7rem);
+  }
+
+  .reports-secondary-metrics p {
+    padding: 12px;
+  }
+
+  .reports-section-heading {
+    gap: 12px;
+  }
+
+  .report-card-heading {
+    align-items: stretch;
+  }
+
+  .report-line-chart {
+    min-height: 220px;
+    margin-inline: -8px;
+  }
+
+  .report-line-chart svg {
+    min-height: 210px;
+  }
+
+  .report-product-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .report-product-heading strong:first-child {
+    white-space: normal;
+  }
+
+  .report-bar-row {
+    grid-template-columns: 82px minmax(50px, 1fr) 68px;
+    gap: 8px;
+  }
+
+  .report-hours-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .report-hour {
+    min-height: 58px;
+    padding: 9px;
+  }
+
+  .report-fulfillment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cancellation {
+    padding: 18px;
+  }
+
+  .report-cancellation dl {
+    gap: 7px;
+  }
+
+  .report-cancellation dl div {
+    padding: 10px 8px;
+  }
+
+  .report-cancellation dt {
+    font-size: 0.65rem;
+  }
+
+  .report-cancellation dd {
+    font-size: 1rem;
   }
 }
 
