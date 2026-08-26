@@ -1368,8 +1368,15 @@ function renderDeliveryNeighborhoodOptions() {
     return;
   }
 
-  deliveryNeighborhoodOptions.innerHTML = visibleDeliveryZones
-    .map((zone, index) => `
+  deliveryNeighborhoodOptions.innerHTML = `
+    <li
+      class="delivery-neighborhood-options-heading"
+      role="presentation"
+      aria-hidden="true"
+    >
+      Selecione seu bairro abaixo
+    </li>
+  ` + visibleDeliveryZones.map((zone, index) => `
       <li
         id="delivery-neighborhood-option-${index}"
         class="delivery-neighborhood-option"

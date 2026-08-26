@@ -26,6 +26,7 @@ const edgeFunction = fs.readFileSync(path.join(
 ), "utf8");
 const checkoutHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const checkoutScript = fs.readFileSync(path.join(root, "script.js"), "utf8");
+const checkoutStyle = fs.readFileSync(path.join(root, "style.css"), "utf8");
 const adminScript = fs.readFileSync(path.join(root, "admin", "admin.js"), "utf8");
 
 const expectedFees = new Map(Object.entries({
@@ -212,7 +213,13 @@ test("autocomplete orienta a seleção sem exibir tarifa nas sugestões", () => 
   assert.match(renderOptions, /<span>\$\{escapeHtml\(zone\.name\)\}<\/span>/u);
   assert.doesNotMatch(renderOptions, /BRL\.format|zone\.fee|<small>|R\$/u);
   assert.match(renderOptions,
+    /delivery-neighborhood-options-heading[\s\S]*Selecione seu bairro abaixo[\s\S]*visibleDeliveryZones\.map/u);
+  assert.match(renderOptions,
     /setDeliveryNeighborhoodMessage\(\s*"Selecione seu bairro abaixo",\s*"instruction"/u);
+  assert.match(checkoutStyle,
+    /\.delivery-neighborhood-options-heading\s*\{[\s\S]*position:\s*sticky;[\s\S]*border-bottom:/u);
+  assert.match(checkoutStyle,
+    /\.delivery-neighborhood-message\.instruction\s*\{[\s\S]*position:\s*absolute;[\s\S]*clip:/u);
   assert.match(selectZone,
     /setDeliveryNeighborhoodMessage\("Bairro selecionado\.", "success"\)/u);
   assert.match(checkoutScript,
