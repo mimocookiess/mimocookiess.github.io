@@ -192,12 +192,37 @@ test("Edge Function aceita somente o slug e valida a resposta financeira", () =>
 test("checkout contém combobox acessível e não usa select de bairros", () => {
   assert.match(checkoutHtml, /id="delivery-neighborhood"[\s\S]*role="combobox"[\s\S]*aria-autocomplete="list"[\s\S]*aria-controls="delivery-neighborhood-options"/);
   assert.match(checkoutHtml, /id="delivery-neighborhood-options"[\s\S]*role="listbox"/);
+  assert.match(checkoutHtml, /id="delivery-neighborhood-selected-indicator"[\s\S]*aria-hidden="true"[\s\S]*hidden/);
   assert.doesNotMatch(checkoutHtml, /<select[^>]*delivery-neighborhood/iu);
   assert.match(checkoutScript, /\["ArrowDown", "ArrowUp", "Enter"\]/);
   assert.match(checkoutScript, /event\.key === "Escape"/);
   assert.match(checkoutScript, /selectedDeliveryZone = null/);
   assert.match(checkoutScript, /data\.delivery_fee/);
   assert.match(checkoutScript, /data\.total/);
+});
+
+test("autocomplete orienta a seleção sem exibir tarifa nas sugestões", () => {
+  const renderOptions = checkoutScript.match(
+    /function renderDeliveryNeighborhoodOptions\(\)[\s\S]*?\n\}\n\nfunction selectDeliveryZone/iu
+  )?.[0] || "";
+  const selectZone = checkoutScript.match(
+    /function selectDeliveryZone\(zone\)[\s\S]*?\n\}\n\ndeliveryNeighborhoodInput\.addEventListener\("input"/iu
+  )?.[0] || "";
+
+  assert.match(renderOptions, /<span>\$\{escapeHtml\(zone\.name\)\}<\/span>/u);
+  assert.doesNotMatch(renderOptions, /BRL\.format|zone\.fee|<small>|R\$/u);
+  assert.match(renderOptions,
+    /setDeliveryNeighborhoodMessage\(\s*"Selecione seu bairro abaixo",\s*"instruction"/u);
+  assert.match(selectZone,
+    /setDeliveryNeighborhoodMessage\("Bairro selecionado\.", "success"\)/u);
+  assert.match(checkoutScript,
+    /deliveryNeighborhoodSelectedIndicator\.hidden = !hasSelectedNeighborhood/u);
+  assert.match(checkoutScript,
+    /selectedDeliveryZone = null;[\s\S]*setDeliveryNeighborhoodValidity\(Boolean\(selectedDeliveryZone\)\)[\s\S]*renderDeliveryNeighborhoodOptions\(\)/u);
+  assert.match(checkoutScript,
+    /deliveryNeighborhoodOptions\.addEventListener\("pointerdown"/u);
+  assert.match(checkoutScript,
+    /deliveryNeighborhoodOptions\.addEventListener\("click"/u);
 });
 
 test("admin lê snapshots e salva custo real pela RPC dedicada", () => {

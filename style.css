@@ -531,6 +531,28 @@ legend, .checkout-form > label, #address-fields:not([hidden]) {
   position: relative;
 }
 
+#delivery-neighborhood.is-selected {
+  padding-right: 40px;
+  border-color: #65926d;
+}
+
+.delivery-neighborhood-selected-indicator {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: #477b52;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.delivery-neighborhood-selected-indicator[hidden] {
+  display: none;
+}
+
 .delivery-neighborhood-options {
   position: absolute;
   z-index: 20;
@@ -562,11 +584,10 @@ legend, .checkout-form > label, #address-fields:not([hidden]) {
   display: flex;
   min-height: 46px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   padding: 10px 11px;
   border-radius: 9px;
   color: var(--brown-dark);
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -575,17 +596,20 @@ legend, .checkout-form > label, #address-fields:not([hidden]) {
   background: var(--surface-2);
 }
 
-.delivery-neighborhood-option small {
-  flex: 0 0 auto;
-  color: var(--brown);
-}
-
 .delivery-neighborhood-message {
   min-height: 18px;
   margin: 0;
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 500;
+}
+
+.delivery-neighborhood-message.instruction {
+  color: var(--brown);
+}
+
+.delivery-neighborhood-message.success {
+  color: #477b52;
 }
 
 .delivery-neighborhood-message.error {

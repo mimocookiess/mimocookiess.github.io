@@ -30,7 +30,15 @@ class FakeElement {
     this.classList = {
       add: (...names) => names.forEach(name => classes.add(name)),
       contains: name => classes.has(name),
-      remove: (...names) => names.forEach(name => classes.delete(name))
+      remove: (...names) => names.forEach(name => classes.delete(name)),
+      toggle: (name, force) => {
+        const shouldAdd = force === undefined ? !classes.has(name) : force;
+
+        if (shouldAdd) classes.add(name);
+        else classes.delete(name);
+
+        return shouldAdd;
+      }
     };
   }
 
@@ -82,6 +90,7 @@ async function createHarness({ invoke } = {}) {
     "address-fields",
     "customer-address",
     "delivery-neighborhood",
+    "delivery-neighborhood-selected-indicator",
     "delivery-neighborhood-options",
     "delivery-neighborhood-message",
     "delivery-choice-fee",

@@ -116,6 +116,9 @@ const deliveryNeighborhoodInput = document.querySelector(
 const deliveryNeighborhoodOptions = document.querySelector(
   "#delivery-neighborhood-options"
 );
+const deliveryNeighborhoodSelectedIndicator = document.querySelector(
+  "#delivery-neighborhood-selected-indicator"
+);
 const deliveryNeighborhoodMessage = document.querySelector(
   "#delivery-neighborhood-message"
 );
@@ -1271,6 +1274,17 @@ function setDeliveryNeighborhoodValidity(isValid) {
       ? "Selecione um bairro nas sugestões."
       : ""
   );
+
+  const hasSelectedNeighborhood = requiresNeighborhood &&
+    isValid &&
+    Boolean(selectedDeliveryZone) &&
+    deliveryNeighborhoodInput.value === selectedDeliveryZone.name;
+
+  deliveryNeighborhoodInput.classList.toggle(
+    "is-selected",
+    hasSelectedNeighborhood
+  );
+  deliveryNeighborhoodSelectedIndicator.hidden = !hasSelectedNeighborhood;
 }
 
 function closeDeliveryNeighborhoodOptions() {
@@ -1279,6 +1293,10 @@ function closeDeliveryNeighborhoodOptions() {
   deliveryNeighborhoodOptions.hidden = true;
   deliveryNeighborhoodInput.setAttribute("aria-expanded", "false");
   deliveryNeighborhoodInput.removeAttribute("aria-activedescendant");
+
+  if (deliveryNeighborhoodMessage.classList.contains("instruction")) {
+    setDeliveryNeighborhoodMessage("");
+  }
 }
 
 function updateActiveDeliveryZoneOption() {
@@ -1360,12 +1378,14 @@ function renderDeliveryNeighborhoodOptions() {
         data-delivery-zone-index="${index}"
       >
         <span>${escapeHtml(zone.name)}</span>
-        <small>${BRL.format(zone.fee)}</small>
       </li>
     `).join("");
   deliveryNeighborhoodOptions.hidden = false;
   deliveryNeighborhoodInput.setAttribute("aria-expanded", "true");
-  setDeliveryNeighborhoodMessage("");
+  setDeliveryNeighborhoodMessage(
+    "Selecione seu bairro abaixo",
+    "instruction"
+  );
   window.requestAnimationFrame(positionDeliveryNeighborhoodOptions);
 }
 
@@ -1375,7 +1395,7 @@ function selectDeliveryZone(zone) {
   selectedDeliveryZone = { ...zone };
   deliveryNeighborhoodInput.value = zone.name;
   setDeliveryNeighborhoodValidity(true);
-  setDeliveryNeighborhoodMessage(`Frete: ${BRL.format(zone.fee)}`);
+  setDeliveryNeighborhoodMessage("Bairro selecionado.", "success");
   closeDeliveryNeighborhoodOptions();
   updateOrderTotals();
   refreshWhatsappButton();
