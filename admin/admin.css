@@ -1481,6 +1481,56 @@ button:disabled {
   color: var(--brown-dark);
 }
 
+.order-delivery-costs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.actual-delivery-fee-form {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.actual-delivery-fee-form label,
+.delivery-difference small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actual-delivery-fee-form > div {
+  display: flex;
+  gap: 7px;
+}
+
+.actual-delivery-fee-form input {
+  width: min(100%, 130px);
+  min-width: 0;
+}
+
+.actual-delivery-fee-form button {
+  padding-inline: 12px;
+}
+
+.actual-delivery-fee-form .message {
+  min-height: 17px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.delivery-difference.cost-over strong {
+  color: var(--danger);
+}
+
+.delivery-difference.cost-under strong,
+.delivery-difference.even strong {
+  color: #226852;
+}
+
 .order-items {
   display: grid;
   gap: 8px;
@@ -1647,6 +1697,18 @@ button:disabled {
 
   .order-details {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .order-delivery-costs {
+    grid-template-columns: 1fr;
+  }
+
+  .actual-delivery-fee-form > div {
+    align-items: stretch;
+  }
+
+  .actual-delivery-fee-form input {
+    width: 100%;
   }
 
   .order-actions {

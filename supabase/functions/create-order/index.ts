@@ -13,6 +13,8 @@ const GA_CLIENT_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
 const GA_SESSION_ID_PATTERN = /^\d{1,32}$/;
 
 const SAFE_RPC_ERROR_MESSAGES = new Set([
+  "Selecione um bairro de entrega valido.",
+  "Bairro de entrega invalido ou indisponivel.",
   "Nome inválido.",
   "Forma de recebimento inválida.",
   "Forma de pagamento inválida.",
@@ -29,6 +31,7 @@ type OrderPayload = {
   p_delivery_method: string;
   p_payment_method: string;
   p_customer_address: string;
+  p_delivery_neighborhood_slug: string | null;
   p_notes: string;
   p_items: Array<{
     slug: string;
@@ -77,6 +80,10 @@ function isValidOrder(value: unknown): value is OrderPayload {
     typeof value.p_delivery_method !== "string" ||
     typeof value.p_payment_method !== "string" ||
     typeof value.p_customer_address !== "string" ||
+    !(
+      value.p_delivery_neighborhood_slug === null ||
+      typeof value.p_delivery_neighborhood_slug === "string"
+    ) ||
     typeof value.p_notes !== "string" ||
     !Array.isArray(items) ||
     items.length < 1 ||
@@ -89,6 +96,10 @@ function isValidOrder(value: unknown): value is OrderPayload {
   const deliveryMethod = value.p_delivery_method.trim();
   const paymentMethod = value.p_payment_method.trim();
   const customerAddress = value.p_customer_address.trim();
+  const deliveryNeighborhoodSlug =
+    typeof value.p_delivery_neighborhood_slug === "string"
+      ? value.p_delivery_neighborhood_slug.trim()
+      : null;
   const notes = value.p_notes.trim();
 
   if (
@@ -102,6 +113,8 @@ function isValidOrder(value: unknown): value is OrderPayload {
     ].includes(paymentMethod) ||
     customerAddress.length > 300 ||
     (deliveryMethod === "Entrega" && customerAddress.length === 0) ||
+    (deliveryMethod === "Entrega" &&
+      (!deliveryNeighborhoodSlug || deliveryNeighborhoodSlug.length > 100)) ||
     notes.length > 500
   ) {
     return false;
@@ -177,11 +190,17 @@ function getSafeRpcErrorMessage(error: unknown) {
   return null;
 }
 
-function isValidRpcResult(value: unknown): value is Record<string, unknown> {
+function isValidRpcResult(
+  value: unknown,
+  deliveryMethod: string
+): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
 
   const orderNumber = value.order_number;
   const subtotal = value.subtotal;
+  const deliveryFee = value.delivery_fee;
+  const total = value.total;
+  const deliveryNeighborhood = value.delivery_neighborhood;
 
   const validOrderNumber =
     (typeof orderNumber === "number" &&
@@ -196,7 +215,24 @@ function isValidRpcResult(value: unknown): value is Record<string, unknown> {
     (typeof subtotal === "string" &&
       /^\d+(?:\.\d+)?$/.test(subtotal));
 
-  return validOrderNumber && validSubtotal;
+  const isValidMoney = (money: unknown) =>
+    (typeof money === "number" && Number.isFinite(money) && money >= 0) ||
+    (typeof money === "string" && /^\d+(?:\.\d+)?$/.test(money));
+
+  const validDeliveryState = deliveryMethod === "Entrega"
+    ? typeof deliveryNeighborhood === "string" &&
+      deliveryNeighborhood.trim().length > 0 &&
+      deliveryNeighborhood.length <= 100
+    : deliveryNeighborhood === null && Number(deliveryFee) === 0;
+
+  return validOrderNumber &&
+    validSubtotal &&
+    isValidMoney(deliveryFee) &&
+    isValidMoney(total) &&
+    validDeliveryState &&
+    typeof value.payment_method === "string" &&
+    typeof value.payment_status === "string" &&
+    Math.abs(Number(subtotal) + Number(deliveryFee) - Number(total)) < 0.005;
 }
 
 function parseAllowedHostnames() {
@@ -275,7 +311,16 @@ async function parseRequest(request: Request): Promise<RequestPayload | null> {
         ? analytics.session_id
         : null
     },
-    order: payload.order
+    order: {
+      p_customer_name: payload.order.p_customer_name,
+      p_delivery_method: payload.order.p_delivery_method,
+      p_payment_method: payload.order.p_payment_method,
+      p_customer_address: payload.order.p_customer_address,
+      p_delivery_neighborhood_slug:
+        payload.order.p_delivery_neighborhood_slug,
+      p_notes: payload.order.p_notes,
+      p_items: payload.order.p_items
+    }
   };
 }
 
@@ -447,7 +492,7 @@ Deno.serve(async request => {
     );
   }
 
-  if (!isValidRpcResult(data)) {
+  if (!isValidRpcResult(data, payload.order.p_delivery_method.trim())) {
     return jsonResponse(
       request,
       { error: "Não foi possível registrar o pedido." },

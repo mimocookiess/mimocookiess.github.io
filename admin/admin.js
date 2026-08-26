@@ -140,6 +140,8 @@ let orderAlertAudioContext = null;
 let orderAlertsEnabled = loadOrderAlertsPreference();
 const alertedOrderIds = new Set();
 const updatingOrderIds = new Set();
+const actualDeliveryFeeSavingIds = new Set();
+const actualDeliveryFeeFeedback = new Map();
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -1150,6 +1152,8 @@ function buildOrdersQuery(activeOnly = false) {
       notes,
       subtotal,
       delivery_fee,
+      delivery_neighborhood,
+      delivery_actual_fee,
       total,
       status,
       cancellation_reason,
@@ -1233,6 +1237,95 @@ async function loadOrders({ activeOnly = false, showLoading = true } = {}) {
   } finally {
     ordersLoadPromise = null;
   }
+}
+
+function getDeliveryDifferenceDetails(order) {
+  if (order.delivery_actual_fee === null || order.delivery_actual_fee === undefined) {
+    return {
+      className: "not-informed",
+      text: "Não informado"
+    };
+  }
+
+  if (order.delivery_fee === null || order.delivery_fee === undefined) {
+    return {
+      className: "not-informed",
+      text: "Indisponível: frete cobrado não registrado"
+    };
+  }
+
+  const difference = Number(order.delivery_actual_fee) -
+    Number(order.delivery_fee);
+  const prefix = difference > 0 ? "+ " : difference < 0 ? "− " : "";
+  const interpretation = difference > 0
+    ? "Mimo pagou mais do que cobrou"
+    : difference < 0
+      ? "Mimo cobrou mais do que pagou"
+      : "Sem diferença";
+
+  return {
+    className: difference > 0 ? "cost-over" : difference < 0 ? "cost-under" : "even",
+    text: `${prefix}${BRL.format(Math.abs(difference))} — ${interpretation}`
+  };
+}
+
+function buildDeliveryCostsHtml(order, orderId) {
+  if (order.delivery_method !== "Entrega") return "";
+
+  const chargedFee = order.delivery_fee === null ||
+    order.delivery_fee === undefined
+    ? "Não informado"
+    : BRL.format(Number(order.delivery_fee));
+  const actualFeeValue = order.delivery_actual_fee === null ||
+    order.delivery_actual_fee === undefined
+    ? ""
+    : Number(order.delivery_actual_fee).toFixed(2);
+  const difference = getDeliveryDifferenceDetails(order);
+  const isSaving = actualDeliveryFeeSavingIds.has(order.id);
+  const feedback = actualDeliveryFeeFeedback.get(order.id) || {
+    text: "",
+    type: ""
+  };
+
+  return `
+    <section class="order-delivery-costs" aria-label="Custos de entrega">
+      <div class="order-detail">
+        <small>Bairro</small>
+        <strong>${escapeHtml(order.delivery_neighborhood || "Não informado")}</strong>
+      </div>
+      <div class="order-detail">
+        <small>Frete cobrado</small>
+        <strong>${escapeHtml(chargedFee)}</strong>
+      </div>
+      <form class="actual-delivery-fee-form" data-actual-delivery-fee-form>
+        <label for="actual-delivery-fee-${orderId}">
+          Frete real pago ao entregador
+        </label>
+        <div>
+          <input
+            id="actual-delivery-fee-${orderId}"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            value="${escapeHtml(actualFeeValue)}"
+            data-actual-delivery-fee-input
+            ${isSaving ? "disabled" : ""}
+          >
+          <button
+            type="submit"
+            data-save-actual-delivery-fee="${orderId}"
+            ${isSaving ? "disabled" : ""}
+          >${isSaving ? "Salvando..." : "Salvar"}</button>
+        </div>
+        <p class="message ${escapeHtml(feedback.type)}" data-actual-delivery-fee-message aria-live="polite">${escapeHtml(feedback.text)}</p>
+      </form>
+      <div class="order-detail delivery-difference ${difference.className}">
+        <small>Diferença</small>
+        <strong>${escapeHtml(difference.text)}</strong>
+      </div>
+    </section>
+  `;
 }
 
 function renderOrders() {
@@ -1353,6 +1446,8 @@ function renderOrders() {
             <strong>${BRL.format(Number(order.subtotal))}</strong>
           </div>
         </div>
+
+        ${buildDeliveryCostsHtml(order, orderId)}
 
         ${
           order.delivery_method === "Entrega"
@@ -1711,6 +1806,93 @@ supabaseClient.auth.onAuthStateChange(event => {
     MimoAdminReports.reset();
     showLogin();
   }
+});
+
+async function saveActualDeliveryFee(form) {
+  const orderCard = form.closest("[data-order-id]");
+  const orderId = orderCard?.dataset.orderId;
+  const order = orders.find(item => item.id === orderId);
+  const input = form.querySelector("[data-actual-delivery-fee-input]");
+  const rawValue = input?.value.trim() || "";
+  const actualFee = Number(rawValue);
+
+  if (!order || order.delivery_method !== "Entrega") return;
+  if (actualDeliveryFeeSavingIds.has(orderId)) return;
+
+  if (!rawValue || !Number.isFinite(actualFee) || actualFee < 0) {
+    actualDeliveryFeeFeedback.set(orderId, {
+      text: "Informe um valor válido maior ou igual a zero.",
+      type: "error"
+    });
+    renderOrders();
+    return;
+  }
+
+  actualDeliveryFeeSavingIds.add(orderId);
+  actualDeliveryFeeFeedback.set(orderId, {
+    text: "Salvando...",
+    type: "loading"
+  });
+  renderOrders();
+
+  let data;
+  let error;
+
+  try {
+    ({ data, error } = await supabaseClient.rpc(
+      "set_order_actual_delivery_fee",
+      {
+        p_order_id: orderId,
+        p_actual_fee: actualFee
+      }
+    ));
+  } catch (requestError) {
+    error = requestError;
+  }
+
+  actualDeliveryFeeSavingIds.delete(orderId);
+
+  if (error || !data || !Number.isFinite(Number(data.delivery_actual_fee))) {
+    console.error(error || "Resposta inválida ao salvar frete real.");
+    actualDeliveryFeeFeedback.set(orderId, {
+      text: `Não foi possível salvar o frete real${error?.message ? `: ${error.message}` : "."}`,
+      type: "error"
+    });
+    renderOrders();
+    return;
+  }
+
+  order.delivery_actual_fee = Number(data.delivery_actual_fee);
+  actualDeliveryFeeFeedback.set(orderId, {
+    text: "Frete real salvo com sucesso.",
+    type: "success"
+  });
+  renderOrders();
+
+  window.setTimeout(() => {
+    const feedback = actualDeliveryFeeFeedback.get(orderId);
+
+    if (feedback?.type !== "success") return;
+
+    actualDeliveryFeeFeedback.delete(orderId);
+    const currentCard = Array.from(
+      ordersList.querySelectorAll("[data-order-id]")
+    ).find(card => card.dataset.orderId === orderId);
+    const message = currentCard?.querySelector(
+      "[data-actual-delivery-fee-message]"
+    );
+
+    if (message) setMessage(message);
+  }, 4_000);
+}
+
+ordersList.addEventListener("submit", async event => {
+  const form = event.target.closest("[data-actual-delivery-fee-form]");
+
+  if (!form) return;
+
+  event.preventDefault();
+  await saveActualDeliveryFee(form);
 });
 
 ordersList.addEventListener("click", async event => {

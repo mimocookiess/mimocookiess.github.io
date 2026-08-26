@@ -271,7 +271,7 @@
             <strong>Funcionamento: das 10h às 21h.</strong> Os cookies são artesanais e assados na hora.
           </p>
           <p class="muted">
-            O pedido pode ser enviado normalmente e o frete será confirmado pelo WhatsApp.
+            O valor da entrega é calculado automaticamente de acordo com o bairro.
           </p>
         </div>
         <div class="pickup-actions">
@@ -316,9 +316,9 @@
           <input type="radio" name="delivery" value="Entrega" checked>
           <span>
             <strong>Entrega</strong>
-            <small>Frete confirmado no WhatsApp</small>
+            <small>Calculado automaticamente pelo bairro</small>
           </span>
-          <b>A calcular</b>
+          <b id="delivery-choice-fee">A calcular</b>
         </label>
         <label class="choice">
           <input type="radio" name="delivery" value="Retirada">
@@ -381,8 +381,38 @@
       </label>
 
       <div id="address-fields">
+        <div class="delivery-neighborhood-field">
+          <label for="delivery-neighborhood">Bairro</label>
+          <div class="delivery-combobox">
+            <input
+              id="delivery-neighborhood"
+              type="text"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="delivery-neighborhood-options"
+              aria-expanded="false"
+              aria-describedby="delivery-neighborhood-message"
+              autocomplete="off"
+              placeholder="Digite seu bairro..."
+              disabled
+              required
+            >
+            <ul
+              id="delivery-neighborhood-options"
+              class="delivery-neighborhood-options"
+              role="listbox"
+              hidden
+            ></ul>
+          </div>
+          <p
+            id="delivery-neighborhood-message"
+            class="delivery-neighborhood-message"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
         <label for="customer-address">Endereço de entrega</label>
-        <input id="customer-address" type="text" placeholder="Rua, número, bairro e complemento" required>
+        <input id="customer-address" type="text" placeholder="Rua, número e complemento" required>
       </div>
 
       <label>
@@ -393,7 +423,7 @@
       <div class="totals">
         <div><span>Produtos</span><strong id="subtotal">R$ 0,00</strong></div>
         <div><span>Entrega</span><strong id="shipping">A calcular</strong></div>
-        <div class="grand-total"><span>Total parcial</span><strong id="total">R$ 0,00</strong></div>
+        <div class="grand-total"><span>Total</span><strong id="total">R$ 0,00</strong></div>
       </div>
 
       <div class="turnstile-section">
@@ -434,6 +464,7 @@
 <script src="supabase-config.js?v=1"></script>
 <script src="products.js?v=4"></script>
 <script src="store-status.js?v=1"></script>
-<script src="script.js?v=20"></script>
+<script src="delivery-zones.js?v=1"></script>
+<script src="script.js?v=21"></script>
 </body>
 </html>

@@ -103,9 +103,14 @@ Depois, no GitHub:
 
 A versão atual oferece:
 - retirada grátis;
-- entrega com frete a confirmar pelo WhatsApp.
+- entrega com tarifa fixa calculada automaticamente pelo bairro;
+- bairro escolhido em autocomplete acessível no checkout;
+- tarifa validada pelo Supabase e salva como snapshot no pedido;
+- registro administrativo posterior do frete real pago ao entregador.
 
-Quando as faixas de entrega forem definidas, o cálculo pode ser adicionado ao `script.js`.
+As tarifas ativas são expostas somente pela RPC de leitura
+`public.list_delivery_zones()`. O frontend envia o slug selecionado, e
+`public.create_order` consulta a tarifa vigente antes de criar o pedido.
 
 ## Regra futura de relatórios
 

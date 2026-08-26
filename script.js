@@ -23,6 +23,10 @@ let cartConfirmationTimeout = null;
 let cartConfirmationFrame = null;
 let checkoutAttempt = null;
 let checkoutStarted = false;
+let deliveryZones = [];
+let selectedDeliveryZone = null;
+let visibleDeliveryZones = [];
+let activeDeliveryZoneIndex = -1;
 const trackedOrderCreatedIds = new Set();
 let storeSettings = {
   isPaused: false,
@@ -106,6 +110,16 @@ const shippingEl = document.querySelector("#shipping");
 const form = document.querySelector("#checkout-form");
 const addressFields = document.querySelector("#address-fields");
 const addressInput = document.querySelector("#customer-address");
+const deliveryNeighborhoodInput = document.querySelector(
+  "#delivery-neighborhood"
+);
+const deliveryNeighborhoodOptions = document.querySelector(
+  "#delivery-neighborhood-options"
+);
+const deliveryNeighborhoodMessage = document.querySelector(
+  "#delivery-neighborhood-message"
+);
+const deliveryChoiceFee = document.querySelector("#delivery-choice-fee");
 const whatsappButton = document.querySelector("#whatsapp-button");
 const turnstileMessage = document.querySelector("#turnstile-message");
 const storePauseBanner = document.querySelector("#store-pause-banner");
@@ -142,7 +156,10 @@ function buildWhatsAppMessage({
   payment,
   delivery,
   address,
+  neighborhood,
   notes,
+  subtotal,
+  deliveryFee,
   total,
   includeEmojis = true
 }) {
@@ -156,11 +173,14 @@ function buildWhatsAppMessage({
   const hasNotes =
     normalizedNotes.toLocaleLowerCase("pt-BR") !== "sem observações" &&
     normalizedNotes.length > 0;
+  const formattedSubtotal = BRL.format(subtotal);
+  const formattedDeliveryFee = BRL.format(deliveryFee);
   const formattedTotal = BRL.format(total);
   const receivingLines = delivery === "Entrega"
     ? [
         `${emojiPrefix("delivery")}*ENTREGA*`,
-        `${emojiPrefix("home")}${address}`
+        `${emojiPrefix("home")}*Endereço:* ${address}`,
+        `${emojiPrefix("pin")}*Bairro:* ${neighborhood}`
       ]
     : [
         `${emojiPrefix("location")}*RETIRADA*`,
@@ -191,9 +211,9 @@ function buildWhatsAppMessage({
   if (delivery === "Entrega") {
     lines.push(
       "",
-      `*Subtotal:* ${formattedTotal}`,
-      "*Frete:* a confirmar",
-      `*Total:* ${formattedTotal} + frete`
+      `*Subtotal:* ${formattedSubtotal}`,
+      `*Frete:* ${formattedDeliveryFee}`,
+      `*Total:* ${formattedTotal}`
     );
   } else {
     lines.push("", `*Total:* ${formattedTotal}`);
@@ -579,12 +599,17 @@ function getCurrentOrderSignature() {
     document.querySelector("#customer-notes")
       ?.value.trim() || "";
 
+  const deliveryNeighborhoodSlug = delivery === "Entrega"
+    ? selectedDeliveryZone?.slug || ""
+    : "";
+
   return JSON.stringify({
     cart: cartItemsSignature,
     delivery,
     payment,
     name,
     address,
+    deliveryNeighborhoodSlug,
     notes
   });
 }
@@ -650,6 +675,25 @@ function refreshWhatsappButton() {
   if (quantity === 0) {
     whatsappButton.disabled = true;
     whatsappButton.textContent = "Pedir pelo WhatsApp";
+    return;
+  }
+
+  const delivery = document.querySelector(
+    'input[name="delivery"]:checked'
+  )?.value;
+  const customerName = document.querySelector("#customer-name")
+    ?.value.trim() || "";
+  const deliveryFieldsValid = delivery !== "Entrega" || (
+    Boolean(selectedDeliveryZone) &&
+    addressInput.value.trim().length > 0
+  );
+
+  if (customerName.length < 2 || !deliveryFieldsValid) {
+    whatsappButton.disabled = true;
+    whatsappButton.textContent = delivery === "Entrega" &&
+      !selectedDeliveryZone
+      ? "Selecione um bairro"
+      : "Preencha os dados obrigatórios";
     return;
   }
 
@@ -725,6 +769,44 @@ async function loadProducts() {
 
 function isProductSoldOut(product) {
   return !product.available || product.stock === 0;
+}
+
+async function loadDeliveryZones() {
+  deliveryNeighborhoodInput.disabled = true;
+  setDeliveryNeighborhoodMessage("Carregando bairros de entrega...");
+
+  try {
+    const { data, error } = await supabaseClient.rpc("list_delivery_zones");
+
+    if (error) throw error;
+
+    deliveryZones = (Array.isArray(data) ? data : [])
+      .map(zone => ({
+        slug: String(zone.slug || ""),
+        name: String(zone.name || ""),
+        fee: Number(zone.fee)
+      }))
+      .filter(zone =>
+        zone.slug && zone.name && Number.isFinite(zone.fee) && zone.fee >= 0
+      );
+
+    if (!deliveryZones.length) {
+      throw new Error("Nenhum bairro de entrega está disponível.");
+    }
+
+    deliveryNeighborhoodInput.disabled = false;
+    setDeliveryNeighborhoodMessage("");
+  } catch (error) {
+    console.error("Erro ao carregar bairros de entrega:", error);
+    deliveryZones = [];
+    deliveryNeighborhoodInput.disabled = true;
+    setDeliveryNeighborhoodMessage(
+      "Não foi possível carregar os bairros. Tente novamente mais tarde.",
+      "error"
+    );
+  }
+
+  refreshWhatsappButton();
 }
 
 function getProductStatus(product) {
@@ -908,6 +990,40 @@ function calculateSubtotal() {
   }, 0);
 }
 
+function getDisplayedDeliveryFee() {
+  const delivery = document.querySelector(
+    'input[name="delivery"]:checked'
+  )?.value;
+
+  if (delivery === "Retirada") return 0;
+  if (delivery === "Entrega" && selectedDeliveryZone) {
+    return selectedDeliveryZone.fee;
+  }
+
+  return null;
+}
+
+function updateOrderTotals() {
+  const subtotal = calculateSubtotal();
+  const deliveryFee = getDisplayedDeliveryFee();
+
+  subtotalEl.textContent = BRL.format(subtotal);
+  shippingEl.textContent = deliveryFee === null
+    ? "A calcular"
+    : deliveryFee === 0
+      ? "Grátis"
+      : BRL.format(deliveryFee);
+  totalEl.textContent = BRL.format(subtotal + (deliveryFee || 0));
+
+  if (deliveryChoiceFee) {
+    deliveryChoiceFee.textContent = deliveryFee === null
+      ? "A calcular"
+      : deliveryFee === 0
+        ? "Grátis"
+        : BRL.format(deliveryFee);
+  }
+}
+
 function getCartAnalyticsLines() {
   return [...cart.entries()]
     .map(([id, quantity]) => ({
@@ -926,8 +1042,7 @@ function updateCart() {
   cartFabSummary.textContent =
     `${quantity} ${quantity === 1 ? "item" : "itens"} · ${BRL.format(subtotal)}`;
 
-  subtotalEl.textContent = BRL.format(subtotal);
-  totalEl.textContent = BRL.format(subtotal);
+  updateOrderTotals();
   
   refreshWhatsappButton();
 
@@ -1134,6 +1249,224 @@ document.addEventListener("keydown", event => {
   }
 });
 
+function setDeliveryNeighborhoodMessage(message, type = "") {
+  deliveryNeighborhoodMessage.textContent = message;
+  deliveryNeighborhoodMessage.className = "delivery-neighborhood-message";
+
+  if (type) deliveryNeighborhoodMessage.classList.add(type);
+}
+
+function setDeliveryNeighborhoodValidity(isValid) {
+  const delivery = document.querySelector(
+    'input[name="delivery"]:checked'
+  )?.value;
+  const requiresNeighborhood = delivery === "Entrega";
+
+  deliveryNeighborhoodInput.setAttribute(
+    "aria-invalid",
+    String(requiresNeighborhood && !isValid)
+  );
+  deliveryNeighborhoodInput.setCustomValidity?.(
+    requiresNeighborhood && !isValid
+      ? "Selecione um bairro nas sugestões."
+      : ""
+  );
+}
+
+function closeDeliveryNeighborhoodOptions() {
+  visibleDeliveryZones = [];
+  activeDeliveryZoneIndex = -1;
+  deliveryNeighborhoodOptions.hidden = true;
+  deliveryNeighborhoodInput.setAttribute("aria-expanded", "false");
+  deliveryNeighborhoodInput.removeAttribute("aria-activedescendant");
+}
+
+function updateActiveDeliveryZoneOption() {
+  const options = Array.from(
+    deliveryNeighborhoodOptions.querySelectorAll("[role=option]")
+  );
+
+  options.forEach((option, index) => {
+    option.setAttribute(
+      "aria-selected",
+      String(index === activeDeliveryZoneIndex)
+    );
+  });
+
+  const activeOption = options[activeDeliveryZoneIndex];
+
+  if (activeOption) {
+    deliveryNeighborhoodInput.setAttribute(
+      "aria-activedescendant",
+      activeOption.id
+    );
+    activeOption.scrollIntoView?.({ block: "nearest" });
+  } else {
+    deliveryNeighborhoodInput.removeAttribute("aria-activedescendant");
+  }
+}
+
+function positionDeliveryNeighborhoodOptions() {
+  if (deliveryNeighborhoodOptions.hidden) return;
+
+  const inputRect = deliveryNeighborhoodInput.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const viewportTop = Number(viewport?.offsetTop) || 0;
+  const viewportHeight = Number(viewport?.height) ||
+    Number(window.innerHeight) || 844;
+  const viewportBottom = viewportTop + viewportHeight;
+  const availableBelow = Math.max(0, viewportBottom - inputRect.bottom - 12);
+  const availableAbove = Math.max(0, inputRect.top - viewportTop - 12);
+  const opensUp = availableBelow < 180 && availableAbove > availableBelow;
+  const availableSpace = opensUp ? availableAbove : availableBelow;
+
+  deliveryNeighborhoodOptions.classList.toggle("opens-up", opensUp);
+  deliveryNeighborhoodOptions.style.maxHeight =
+    `${Math.max(96, Math.min(320, availableSpace))}px`;
+}
+
+function renderDeliveryNeighborhoodOptions() {
+  const query = deliveryNeighborhoodInput.value;
+
+  if (!query.trim()) {
+    closeDeliveryNeighborhoodOptions();
+    setDeliveryNeighborhoodMessage("");
+    return;
+  }
+
+  visibleDeliveryZones = MimoDeliveryZones.filterDeliveryZones(
+    deliveryZones,
+    query,
+    7
+  );
+  activeDeliveryZoneIndex = -1;
+
+  if (!visibleDeliveryZones.length) {
+    closeDeliveryNeighborhoodOptions();
+    setDeliveryNeighborhoodMessage(
+      "Nenhum bairro de entrega encontrado.",
+      "error"
+    );
+    return;
+  }
+
+  deliveryNeighborhoodOptions.innerHTML = visibleDeliveryZones
+    .map((zone, index) => `
+      <li
+        id="delivery-neighborhood-option-${index}"
+        class="delivery-neighborhood-option"
+        role="option"
+        aria-selected="false"
+        data-delivery-zone-index="${index}"
+      >
+        <span>${escapeHtml(zone.name)}</span>
+        <small>${BRL.format(zone.fee)}</small>
+      </li>
+    `).join("");
+  deliveryNeighborhoodOptions.hidden = false;
+  deliveryNeighborhoodInput.setAttribute("aria-expanded", "true");
+  setDeliveryNeighborhoodMessage("");
+  window.requestAnimationFrame(positionDeliveryNeighborhoodOptions);
+}
+
+function selectDeliveryZone(zone) {
+  if (!zone) return;
+
+  selectedDeliveryZone = { ...zone };
+  deliveryNeighborhoodInput.value = zone.name;
+  setDeliveryNeighborhoodValidity(true);
+  setDeliveryNeighborhoodMessage(`Frete: ${BRL.format(zone.fee)}`);
+  closeDeliveryNeighborhoodOptions();
+  updateOrderTotals();
+  refreshWhatsappButton();
+}
+
+deliveryNeighborhoodInput.addEventListener("input", () => {
+  if (
+    selectedDeliveryZone &&
+    deliveryNeighborhoodInput.value !== selectedDeliveryZone.name
+  ) {
+    selectedDeliveryZone = null;
+  }
+
+  setDeliveryNeighborhoodValidity(Boolean(selectedDeliveryZone));
+  renderDeliveryNeighborhoodOptions();
+  updateOrderTotals();
+  refreshWhatsappButton();
+});
+
+deliveryNeighborhoodInput.addEventListener("focus", () => {
+  if (deliveryNeighborhoodInput.value.trim() && !selectedDeliveryZone) {
+    renderDeliveryNeighborhoodOptions();
+  }
+});
+
+deliveryNeighborhoodInput.addEventListener("blur", () => {
+  window.setTimeout(closeDeliveryNeighborhoodOptions, 100);
+});
+
+deliveryNeighborhoodInput.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    if (!deliveryNeighborhoodOptions.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDeliveryNeighborhoodOptions();
+    }
+    return;
+  }
+
+  if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+
+  if (deliveryNeighborhoodOptions.hidden && event.key !== "Enter") {
+    renderDeliveryNeighborhoodOptions();
+  }
+
+  if (!visibleDeliveryZones.length) return;
+
+  if (event.key === "Enter") {
+    if (activeDeliveryZoneIndex < 0) return;
+    event.preventDefault();
+    selectDeliveryZone(visibleDeliveryZones[activeDeliveryZoneIndex]);
+    return;
+  }
+
+  event.preventDefault();
+  activeDeliveryZoneIndex = event.key === "ArrowDown"
+    ? (activeDeliveryZoneIndex + 1) % visibleDeliveryZones.length
+    : (activeDeliveryZoneIndex - 1 + visibleDeliveryZones.length) %
+      visibleDeliveryZones.length;
+  updateActiveDeliveryZoneOption();
+});
+
+deliveryNeighborhoodOptions.addEventListener("pointerdown", event => {
+  const option = event.target.closest("[data-delivery-zone-index]");
+
+  if (!option) return;
+
+  event.preventDefault();
+});
+
+deliveryNeighborhoodOptions.addEventListener("click", event => {
+  const option = event.target.closest("[data-delivery-zone-index]");
+
+  if (!option) return;
+
+  selectDeliveryZone(
+    visibleDeliveryZones[Number(option.dataset.deliveryZoneIndex)]
+  );
+  deliveryNeighborhoodInput.focus();
+});
+
+window.addEventListener?.("resize", positionDeliveryNeighborhoodOptions);
+window.visualViewport?.addEventListener(
+  "resize",
+  positionDeliveryNeighborhoodOptions
+);
+window.visualViewport?.addEventListener(
+  "scroll",
+  positionDeliveryNeighborhoodOptions
+);
+
 function updateDeliveryFields() {
   const selectedDelivery = document.querySelector(
     'input[name="delivery"]:checked'
@@ -1142,7 +1475,13 @@ function updateDeliveryFields() {
 
   addressFields.hidden = !isDelivery;
   addressInput.required = isDelivery;
-  shippingEl.textContent = isDelivery ? "A calcular" : "Grátis";
+  deliveryNeighborhoodInput.required = isDelivery;
+  setDeliveryNeighborhoodValidity(!isDelivery || Boolean(selectedDeliveryZone));
+
+  if (!isDelivery) closeDeliveryNeighborhoodOptions();
+
+  updateOrderTotals();
+  refreshWhatsappButton();
 }
 
 document
@@ -1160,6 +1499,7 @@ function handleCheckoutInteraction(event) {
     !event.target.matches(`
       #customer-name,
       #customer-address,
+      #delivery-neighborhood,
       #customer-notes,
       input[name="delivery"],
       input[name="payment"]
@@ -1209,6 +1549,25 @@ form.addEventListener("submit", async event => {
     if (!confirmed) return;
   }
 
+  const delivery = document
+    .querySelector('input[name="delivery"]:checked')
+    .value;
+
+  if (delivery === "Entrega" && !selectedDeliveryZone) {
+    setDeliveryNeighborhoodValidity(false);
+    setDeliveryNeighborhoodMessage(
+      "Selecione um bairro oficial nas sugestões.",
+      "error"
+    );
+    deliveryNeighborhoodInput.focus();
+    return;
+  }
+
+  if (delivery === "Entrega" && !addressInput.value.trim()) {
+    addressInput.focus();
+    return;
+  }
+
   const currentSignature = getCurrentOrderSignature();
 
   /*
@@ -1242,10 +1601,6 @@ form.addEventListener("submit", async event => {
     .querySelector("#customer-name")
     .value
     .trim();
-
-  const delivery = document
-    .querySelector('input[name="delivery"]:checked')
-    .value;
 
   const payment = document
     .querySelector('input[name="payment"]:checked')
@@ -1295,6 +1650,8 @@ form.addEventListener("submit", async event => {
               p_payment_method: payment,
               p_customer_address:
                 delivery === "Entrega" ? address : "",
+              p_delivery_neighborhood_slug:
+                delivery === "Entrega" ? selectedDeliveryZone.slug : null,
               p_notes: notes,
               p_items: items
             }
@@ -1317,6 +1674,30 @@ form.addEventListener("submit", async event => {
 
     const orderNumber = data.order_number;
     const subtotal = Number(data.subtotal);
+    const deliveryFee = Number(data.delivery_fee);
+    const total = Number(data.total);
+    const deliveryNeighborhood = data.delivery_neighborhood;
+
+    if (
+      !Number.isFinite(subtotal) ||
+      !Number.isFinite(deliveryFee) ||
+      !Number.isFinite(total) ||
+      (delivery === "Entrega" && !deliveryNeighborhood)
+    ) {
+      throw new Error("A resposta do servidor foi inválida.");
+    }
+
+    if (delivery === "Entrega") {
+      selectedDeliveryZone = {
+        ...selectedDeliveryZone,
+        name: deliveryNeighborhood,
+        fee: deliveryFee
+      };
+      deliveryNeighborhoodInput.value = deliveryNeighborhood;
+      setDeliveryNeighborhoodMessage(`Frete: ${BRL.format(deliveryFee)}`);
+    }
+
+    updateOrderTotals();
     const analyticsOrderId = `MIMO-${orderNumber}`;
 
     if (!trackedOrderCreatedIds.has(analyticsOrderId)) {
@@ -1345,8 +1726,11 @@ form.addEventListener("submit", async event => {
       payment,
       delivery,
       address,
+      neighborhood: deliveryNeighborhood,
       notes,
-      total: subtotal,
+      subtotal,
+      deliveryFee,
+      total,
       includeEmojis: shouldIncludeWhatsAppEmojis()
     });
 
@@ -1376,7 +1760,12 @@ async function initializeStore() {
     window.MimoCatalogLoading?.renderSkeletons();
   }
 
-  PRODUCTS = await loadProducts();
+  const [loadedProducts] = await Promise.all([
+    loadProducts(),
+    loadDeliveryZones()
+  ]);
+
+  PRODUCTS = loadedProducts;
 
   renderProducts();
 

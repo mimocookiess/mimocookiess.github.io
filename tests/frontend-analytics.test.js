@@ -81,6 +81,10 @@ async function createHarness({ invoke } = {}) {
     "checkout-form",
     "address-fields",
     "customer-address",
+    "delivery-neighborhood",
+    "delivery-neighborhood-options",
+    "delivery-neighborhood-message",
+    "delivery-choice-fee",
     "customer-name",
     "customer-notes",
     "whatsapp-button",
@@ -93,6 +97,8 @@ async function createHarness({ invoke } = {}) {
     "cart-pause-title",
     "cart-pause-message"
   ].map(id => [id, new FakeElement({ id })]));
+  elements["customer-address"].value = "Rua de teste, 123";
+  elements["delivery-neighborhood-options"].hidden = true;
   const delivery = new FakeElement({ name: "delivery", value: "Entrega" });
   const payment = new FakeElement({ name: "payment", value: "Pix" });
   const analyticsCalls = [];
@@ -103,6 +109,9 @@ async function createHarness({ invoke } = {}) {
       id: "00000000-0000-4000-8000-000000000078",
       order_number: 78,
       subtotal: 10,
+      delivery_fee: 12,
+      total: 22,
+      delivery_neighborhood: "Mapiri",
       payment_method: "Pix",
       payment_status: "pending"
     },
@@ -165,6 +174,11 @@ async function createHarness({ invoke } = {}) {
       available: true,
       stock: 10
     }],
+    MimoDeliveryZones: {
+      filterDeliveryZones: (zones, query, limit) => zones
+        .filter(zone => zone.name.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, limit)
+    },
     MimoStoreStatus: {
       STORE_MODES: {
         OPEN: "open",
@@ -185,6 +199,13 @@ async function createHarness({ invoke } = {}) {
     },
     supabaseClient: {
       from: table => table === "products" ? productsQuery : settingsQuery,
+      async rpc(name) {
+        assert.equal(name, "list_delivery_zones");
+        return {
+          data: [{ slug: "mapiri", name: "Mapiri", fee: 12 }],
+          error: null
+        };
+      },
       functions: {
         async invoke(name, options) {
           invokeBodies.push(options.body);
@@ -229,6 +250,7 @@ async function createHarness({ invoke } = {}) {
   Object.assign(context, { window });
   vm.runInContext(scriptSource, context);
   await new Promise(resolve => setImmediate(resolve));
+  vm.runInContext("selectDeliveryZone(deliveryZones[0]);", context);
 
   return {
     analyticsCalls,
@@ -290,6 +312,36 @@ test("order_created ocorre uma vez após o backend e antes do WhatsApp", async (
     client_id: "123.456",
     session_id: "1700000000"
   });
+  assert.equal(
+    invokeBodies[0].order.p_delivery_neighborhood_slug,
+    "mapiri"
+  );
+  assert.equal(Object.hasOwn(invokeBodies[0].order, "p_delivery_fee"), false);
+});
+
+test("WhatsApp usa bairro, frete e total retornados pelo backend", async () => {
+  const { context } = await createHarness();
+  const message = vm.runInContext(`buildWhatsAppMessage({
+    orderNumber: 91,
+    customerName: "Cliente",
+    items: ["2x Tradicional — R$ 20,00"],
+    payment: "Pix",
+    delivery: "Entrega",
+    address: "Rua X, 123",
+    neighborhood: "Mapiri",
+    notes: "",
+    subtotal: 20,
+    deliveryFee: 12,
+    total: 32,
+    includeEmojis: false
+  })`, context);
+
+  assert.match(message, /\*Endereço:\* Rua X, 123/);
+  assert.match(message, /\*Bairro:\* Mapiri/);
+  assert.match(message, /\*Subtotal:\* R\$\s20,00/);
+  assert.match(message, /\*Frete:\* R\$\s12,00/);
+  assert.match(message, /\*Total:\* R\$\s32,00/);
+  assert.doesNotMatch(message, /a confirmar|\+ frete/i);
 });
 
 test("erro não emite order_created e retry reutiliza checkout_attempt_id", async () => {
@@ -306,6 +358,9 @@ test("erro não emite order_created e retry reutiliza checkout_attempt_id", asyn
           id: "00000000-0000-4000-8000-000000000078",
           order_number: 78,
           subtotal: 10,
+          delivery_fee: 12,
+          total: 22,
+          delivery_neighborhood: "Mapiri",
           payment_method: "Pix",
           payment_status: "pending"
         },
