@@ -11,6 +11,12 @@ const migrationPath = path.join(
   "20260826180000_add_delivery_zones_and_actual_fees.sql"
 );
 const migration = fs.readFileSync(migrationPath, "utf8");
+const reducedFeesMigration = fs.readFileSync(path.join(
+  root,
+  "supabase",
+  "migrations",
+  "20260826220000_reduce_delivery_fees.sql"
+), "utf8");
 const completedOrderFixMigration = fs.readFileSync(path.join(
   root,
   "supabase",
@@ -30,58 +36,58 @@ const checkoutStyle = fs.readFileSync(path.join(root, "style.css"), "utf8");
 const adminScript = fs.readFileSync(path.join(root, "admin", "admin.js"), "utf8");
 
 const expectedFees = new Map(Object.entries({
-  "Aeroporto Velho": 7.00,
-  "Aldeia": 9.00,
-  "Alvorada": 17.00,
-  "Amparo": 16.20,
-  "Aparecida": 7.20,
-  "Área Verde": 10.00,
-  "Cambuquira": 17.00,
-  "Caranazal": 9.00,
-  "Centro": 8.00,
-  "Cidade Jardim": 14.40,
-  "Conquista": 16.20,
-  "Diamantino": 8.00,
-  "Elcione Barbalho": 16.00,
-  "Esperança": 7.00,
-  "Espírito Santo": 12.60,
-  "Fátima": 8.00,
-  "Floresta": 9.00,
-  "Interventoria": 7.00,
-  "Ipanema": 16.20,
-  "Jaderlândia": 14.40,
-  "Jardim Santarém": 7.00,
-  "Juá": 12.60,
-  "Jutaí": 16.20,
-  "Laguinho": 9.00,
-  "Liberdade": 7.20,
-  "Livramento": 17.00,
-  "Maicá": 16.20,
-  "Mapiri": 12.00,
-  "Maracanã": 17.00,
-  "Maracanã I": 17.00,
-  "Mararú": 17.00,
-  "Matinha": 16.20,
-  "Nova Jerusalém": 14.40,
-  "Nova República": 12.60,
-  "Nova Vitória": 17.00,
-  "Novo Horizonte": 17.00,
-  "Pérola do Maicá": 17.00,
-  "Prainha": 7.00,
-  "Salé": 9.00,
-  "Santa Clara": 8.00,
-  "Santana": 9.00,
-  "Santarenzinho": 14.40,
-  "Santíssimo": 8.00,
-  "Santo André": 14.40,
-  "São Cristóvão": 17.00,
-  "São Francisco": 14.40,
-  "São José Operário": 12.60,
-  "Uruará": 8.00,
-  "Urumanduba": 17.00,
-  "Urumari": 9.00,
-  "Vigia": 17.00,
-  "Vitória Régia": 17.00
+  "Aeroporto Velho": 6.00,
+  "Aldeia": 8.00,
+  "Alvorada": 16.00,
+  "Amparo": 15.20,
+  "Aparecida": 6.20,
+  "Área Verde": 9.00,
+  "Cambuquira": 16.00,
+  "Caranazal": 8.00,
+  "Centro": 7.00,
+  "Cidade Jardim": 13.40,
+  "Conquista": 15.20,
+  "Diamantino": 7.00,
+  "Elcione Barbalho": 15.00,
+  "Esperança": 6.00,
+  "Espírito Santo": 11.60,
+  "Fátima": 7.00,
+  "Floresta": 8.00,
+  "Interventoria": 6.00,
+  "Ipanema": 15.20,
+  "Jaderlândia": 13.40,
+  "Jardim Santarém": 6.00,
+  "Juá": 11.60,
+  "Jutaí": 15.20,
+  "Laguinho": 8.00,
+  "Liberdade": 6.20,
+  "Livramento": 16.00,
+  "Maicá": 15.20,
+  "Mapiri": 11.00,
+  "Maracanã": 16.00,
+  "Maracanã I": 16.00,
+  "Mararú": 16.00,
+  "Matinha": 15.20,
+  "Nova Jerusalém": 13.40,
+  "Nova República": 11.60,
+  "Nova Vitória": 16.00,
+  "Novo Horizonte": 16.00,
+  "Pérola do Maicá": 16.00,
+  "Prainha": 6.00,
+  "Salé": 8.00,
+  "Santa Clara": 7.00,
+  "Santana": 8.00,
+  "Santarenzinho": 13.40,
+  "Santíssimo": 6.00,
+  "Santo André": 13.40,
+  "São Cristóvão": 16.00,
+  "São Francisco": 13.40,
+  "São José Operário": 11.60,
+  "Uruará": 7.00,
+  "Urumanduba": 16.00,
+  "Urumari": 8.00,
+  "Vigia": 16.00,
+  "Vitória Régia": 16.00
 }));
 
 function parseZoneRows(sql) {
@@ -96,7 +102,16 @@ function parseZoneRows(sql) {
   }));
 }
 
-test("migration cadastra exatamente os 52 bairros e tarifas oficiais", () => {
+function parseFeeUpdates(sql) {
+  return [...sql.matchAll(
+    /\('([^']+)',\s*(\d+\.\d{2})::numeric\)/g
+  )].map(match => ({
+    slug: match[1],
+    fee: Number(match[2])
+  }));
+}
+
+test("migration base cadastra exatamente os 52 bairros", () => {
   const zones = parseZoneRows(migration);
 
   assert.equal(zones.length, 52);
@@ -105,12 +120,25 @@ test("migration cadastra exatamente os 52 bairros e tarifas oficiais", () => {
   assert.deepEqual(zones.map(zone => zone.sortOrder),
     Array.from({ length: 52 }, (_, index) => index + 1));
 
+  assert.deepEqual(new Set(zones.map(zone => zone.name)), new Set(expectedFees.keys()));
+});
+
+test("migration comercial define explicitamente as 52 tarifas finais", () => {
+  const zones = parseZoneRows(migration);
+  const fees = parseFeeUpdates(reducedFeesMigration);
+  const feesBySlug = new Map(fees.map(({ slug, fee }) => [slug, fee]));
+
+  assert.equal(fees.length, 52);
+  assert.equal(feesBySlug.size, 52);
+
   for (const zone of zones) {
     assert.equal(expectedFees.has(zone.name), true, zone.name);
-    assert.equal(zone.fee, expectedFees.get(zone.name), zone.name);
+    assert.equal(feesBySlug.get(zone.slug), expectedFees.get(zone.name), zone.name);
   }
 
-  assert.deepEqual(new Set(zones.map(zone => zone.name)), new Set(expectedFees.keys()));
+  assert.match(reducedFeesMigration,
+    /v_zone_count\s*<>\s*52[\s\S]*v_updated_count\s*<>\s*52/iu);
+  assert.doesNotMatch(reducedFeesMigration, /fee\s*=\s*fee\s*-|update\s+public\.orders/iu);
 });
 
 test("origens administrativas seguem a classificação solicitada", () => {
