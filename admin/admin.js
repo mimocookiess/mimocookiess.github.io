@@ -991,7 +991,14 @@ function renderProducts() {
     return;
   }
 
-  productsList.innerHTML = products.map(product => `
+  productsList.innerHTML = products.map(product => {
+    const availabilityLabel = !product.available
+      ? "oculto"
+      : product.stock !== null && product.stock <= 0
+        ? "visível · esgotado"
+        : "visível · disponível";
+
+    return `
     <article
       class="product-row ${product.available ? "" : "status-off"}"
     >
@@ -1007,7 +1014,7 @@ function renderProducts() {
         <div class="product-meta">
           ${BRL.format(Number(product.price))}
           · ordem ${escapeHtml(product.display_order)}
-          · ${product.available ? "disponível" : "esgotado"}
+          · ${availabilityLabel}
           ${product.stock === null ? "" : ` · estoque ${escapeHtml(product.stock)}`}
         </div>
       </div>
@@ -1029,7 +1036,8 @@ function renderProducts() {
         </button>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
 }
 
 const ORDER_STATUS_LABELS = {

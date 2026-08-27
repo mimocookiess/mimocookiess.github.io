@@ -18,15 +18,19 @@ Use apenas números, incluindo:
 
 O secret do Turnstile nunca deve ser colocado no frontend ou neste repositório.
 
-## Alterar preços, sabores ou disponibilidade
+## Alterar preços, sabores, visibilidade ou estoque
 
 Use o painel administrativo. O arquivo `products.js` contém somente o cardápio de contingência usado quando os produtos não podem ser carregados do Supabase.
 
-Para esgotar um sabor:
+O campo `available` controla somente a visibilidade no cardápio. Para ocultar
+um sabor:
 
 ```js
 available: false
 ```
+
+Para manter um sabor visível como esgotado, use `available: true` e `stock: 0`.
+Estoque `null` significa que a quantidade não é controlada.
 
 ## Proteção contra bots
 

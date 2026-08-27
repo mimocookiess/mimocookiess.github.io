@@ -742,36 +742,38 @@ async function loadProducts() {
         "Nenhum produto encontrado no Supabase. Usando produtos locais."
       );
 
-      return FALLBACK_PRODUCTS;
+      return FALLBACK_PRODUCTS.filter(product => product.available === true);
     }
 
     productsLoadedFromSupabase = true;
 
-    return data.map(product => ({
-      id: product.slug,
-      databaseId: product.id,
-      name: product.name,
-      price: Number(product.price),
-      image: product.image_url,
-      description: product.description,
-      available:
-        product.available &&
-        (product.stock === null || product.stock > 0),
-      stock: product.stock,
-      displayOrder: product.display_order
-    }));
+    return data
+      .filter(product => product.available === true)
+      .map(product => ({
+        id: product.slug,
+        databaseId: product.id,
+        name: product.name,
+        price: Number(product.price),
+        image: product.image_url,
+        description: product.description,
+        available: product.available,
+        stock: product.stock,
+        displayOrder: product.display_order
+      }));
   } catch (error) {
     console.error(
       "Erro ao carregar produtos do Supabase:",
       error
     );
 
-    return FALLBACK_PRODUCTS;
+    return FALLBACK_PRODUCTS.filter(product => product.available === true);
   }
 }
 
 function isProductSoldOut(product) {
-  return !product.available || product.stock === 0;
+  return product.stock !== null &&
+    product.stock !== undefined &&
+    product.stock <= 0;
 }
 
 async function loadDeliveryZones() {
@@ -861,7 +863,9 @@ function sortProductsForDisplay(products) {
 }
 
 function renderProducts() {
-  const productsForDisplay = sortProductsForDisplay(PRODUCTS);
+  const productsForDisplay = sortProductsForDisplay(
+    PRODUCTS.filter(product => product.available === true)
+  );
 
   grid.innerHTML = productsForDisplay.map(product => {
     const status = getProductStatus(product);
@@ -898,11 +902,11 @@ function renderProducts() {
             class="add-button"
             type="button"
             data-add="${productId}"
-            ${product.available ? "" : "disabled"}
+            ${isProductSoldOut(product) ? "disabled" : ""}
           >
-            ${product.available
-              ? "Adicionar ao pedido"
-              : "Indisponível"}
+            ${isProductSoldOut(product)
+              ? "Indisponível"
+              : "Adicionar ao pedido"}
           </button>
         </div>
       </article>
@@ -922,7 +926,7 @@ grid.addEventListener("click", event => {
 function addItem(id) {
   const product = getProduct(id);
 
-  if (!product || !product.available) return;
+  if (!product || product.available !== true || isProductSoldOut(product)) return;
 
   const currentQuantity = cart.get(id) || 0;
 

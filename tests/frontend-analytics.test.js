@@ -74,7 +74,7 @@ class FakeElement {
   }
 }
 
-async function createHarness({ invoke } = {}) {
+async function createHarness({ invoke, productsData = [] } = {}) {
   const elements = Object.fromEntries([
     "product-grid",
     "cart-fab",
@@ -143,7 +143,7 @@ async function createHarness({ invoke } = {}) {
   };
   const productsQuery = {
     select() { return this; },
-    async order() { return { data: [], error: null }; }
+    async order() { return { data: productsData, error: null }; }
   };
   const settingsQuery = {
     select() { return this; },
@@ -270,6 +270,70 @@ async function createHarness({ invoke } = {}) {
     setInvoke(nextInvoke) { invokeImplementation = nextInvoke; }
   };
 }
+
+test("catálogo separa visibilidade de disponibilidade por estoque", async () => {
+  const createProduct = ({ slug, available, stock, displayOrder }) => ({
+    id: `00000000-0000-4000-8000-${String(displayOrder).padStart(12, "0")}`,
+    slug,
+    name: slug,
+    price: 10,
+    description: `Produto ${slug}`,
+    image_url: `https://example.test/${slug}.webp`,
+    available,
+    stock,
+    display_order: displayOrder
+  });
+  const harness = await createHarness({
+    productsData: [
+      createProduct({
+        slug: "visivel-com-estoque",
+        available: true,
+        stock: 5,
+        displayOrder: 1
+      }),
+      createProduct({
+        slug: "visivel-sem-estoque",
+        available: true,
+        stock: 0,
+        displayOrder: 2
+      }),
+      createProduct({
+        slug: "oculto-com-estoque",
+        available: false,
+        stock: 5,
+        displayOrder: 3
+      }),
+      createProduct({
+        slug: "oculto-sem-estoque",
+        available: false,
+        stock: 0,
+        displayOrder: 4
+      })
+    ]
+  });
+  const catalogHtml = harness.elements["product-grid"].innerHTML;
+
+  assert.match(catalogHtml, /visivel-com-estoque/);
+  assert.match(catalogHtml, /visivel-sem-estoque/);
+  assert.doesNotMatch(catalogHtml, /oculto-com-estoque/);
+  assert.doesNotMatch(catalogHtml, /oculto-sem-estoque/);
+  assert.match(
+    catalogHtml,
+    /visivel-sem-estoque[\s\S]*?status-sold-out[\s\S]*?disabled[\s\S]*?Indisponível/
+  );
+
+  vm.runInContext(`
+    addItem("visivel-com-estoque");
+    addItem("visivel-sem-estoque");
+    addItem("oculto-com-estoque");
+    addItem("oculto-sem-estoque");
+  `, harness.context);
+
+  assert.deepEqual(
+    JSON.parse(vm.runInContext("JSON.stringify([...cart.entries()])", harness.context)),
+    [["visivel-com-estoque", 1]]
+  );
+});
 
 test("fluxo do carrinho emite deltas, uma visualização por abertura e um checkout", async () => {
   const harness = await createHarness();
