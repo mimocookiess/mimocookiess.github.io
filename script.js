@@ -728,6 +728,7 @@ async function loadProducts() {
         description,
         image_url,
         available,
+        is_new,
         stock,
         display_order
       `)
@@ -757,6 +758,7 @@ async function loadProducts() {
         image: product.image_url,
         description: product.description,
         available: product.available,
+        is_new: product.is_new === true,
         stock: product.stock,
         displayOrder: product.display_order
       }));
@@ -842,6 +844,14 @@ function getProductStatus(product) {
 
 function sortProductsForDisplay(products) {
   return [...products].sort((firstProduct, secondProduct) => {
+    const newProductComparison =
+      Number(secondProduct.is_new === true) -
+      Number(firstProduct.is_new === true);
+
+    if (newProductComparison !== 0) {
+      return newProductComparison;
+    }
+
     const soldOutComparison =
       Number(isProductSoldOut(firstProduct)) -
       Number(isProductSoldOut(secondProduct));
@@ -885,9 +895,14 @@ function renderProducts() {
             decoding="async"
           >
 
-          <span class="status-pill ${status.className}">
-            ${status.text}
-          </span>
+          <div class="product-statuses">
+            <span class="status-pill ${status.className}">
+              ${status.text}
+            </span>
+            ${product.is_new === true ? `
+              <span class="status-pill status-new">NOVIDADE ✨</span>
+            ` : ""}
+          </div>
         </div>
 
         <div class="product-body">

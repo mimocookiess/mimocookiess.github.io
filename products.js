@@ -5,7 +5,8 @@ const FALLBACK_PRODUCTS = [
     price: 16,
     image: "assets/images/biscoff.webp",
     description: "Massa caramelizada com creme e biscoito Biscoff.",
-    available: true
+    available: true,
+    is_new: false
   },
   {
     id: "tradicional",
@@ -13,7 +14,8 @@ const FALLBACK_PRODUCTS = [
     price: 10,
     image: "assets/images/tradicional-v2.webp",
     description: "O clássico da casa, com massa amanteigada e chocolate.",
-    available: true
+    available: true,
+    is_new: false
   },
   {
     id: "chocolatudo",
@@ -21,7 +23,8 @@ const FALLBACK_PRODUCTS = [
     price: 12,
     image: "assets/images/chocolatudo.webp",
     description: "Massa de chocolate com recheio de brigadeiro de panela.",
-    available: true
+    available: true,
+    is_new: false
   },
   {
     id: "caramelo-salgado",
@@ -29,7 +32,8 @@ const FALLBACK_PRODUCTS = [
     price: 12,
     image: "assets/images/caramelo-salgado.webp",
     description: "Cookie macio com recheio cremoso de caramelo salgado.",
-    available: true
+    available: true,
+    is_new: false
   },
   {
     id: "kitkat",
@@ -37,7 +41,8 @@ const FALLBACK_PRODUCTS = [
     price: 15,
     image: "assets/images/kitkat-v2.webp",
     description: "Cookie recheado com creme de KitKat e finalizado com KitKat.",
-    available: true
+    available: true,
+    is_new: false
   },
   {
     id: "red-velvet",
@@ -45,6 +50,7 @@ const FALLBACK_PRODUCTS = [
     price: 14,
     image: "assets/images/red-velvet-v2.webp",
     description: "Massa red velvet com chocolate branco.",
-    available: true
+    available: true,
+    is_new: false
   }
 ];

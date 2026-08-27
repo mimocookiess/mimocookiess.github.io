@@ -75,6 +75,7 @@ const productImagePreviewWrap = document.querySelector(
 );
 const productStock = document.querySelector("#product-stock");
 const productOrder = document.querySelector("#product-order");
+const productIsNew = document.querySelector("#product-is-new");
 const productAvailable = document.querySelector("#product-available");
 
 const formTitle = document.querySelector("#form-title");
@@ -961,6 +962,7 @@ async function loadProducts() {
       description,
       image_url,
       available,
+      is_new,
       stock,
       display_order
     `)
@@ -998,6 +1000,8 @@ function renderProducts() {
         ? "visível · esgotado"
         : "visível · disponível";
 
+    const newProductLabel = product.is_new === true ? " · novidade" : "";
+
     return `
     <article
       class="product-row ${product.available ? "" : "status-off"}"
@@ -1015,6 +1019,7 @@ function renderProducts() {
           ${BRL.format(Number(product.price))}
           · ordem ${escapeHtml(product.display_order)}
           · ${availabilityLabel}
+          ${newProductLabel}
           ${product.stock === null ? "" : ` · estoque ${escapeHtml(product.stock)}`}
         </div>
       </div>
@@ -1610,6 +1615,7 @@ productForm.addEventListener("submit", async event => {
     description: productDescription.value.trim(),
     image_url: productImage.value.trim(),
     available: productAvailable.checked,
+    is_new: productIsNew.checked,
     stock:
       productStock.value === ""
         ? null
@@ -1738,6 +1744,7 @@ function startEditing(id) {
   productStock.value =
     product.stock === null ? "" : product.stock;
   productOrder.value = product.display_order;
+  productIsNew.checked = product.is_new === true;
   productAvailable.checked = product.available;
 
   formEyebrow.textContent = "Editando sabor";
@@ -1793,6 +1800,7 @@ function resetProductForm() {
 
   productId.value = "";
   productOrder.value = "0";
+  productIsNew.checked = false;
   productAvailable.checked = true;
 
   formEyebrow.textContent = "Novo sabor";

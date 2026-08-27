@@ -258,10 +258,17 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 @media (prefers-reduced-motion: reduce) {
   .skeleton-block { animation: none; }
 }
-.status-pill {
+.product-statuses {
   position: absolute;
   top: 14px;
   left: 14px;
+  right: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+.status-pill {
   padding: 7px 10px;
   border-radius: 999px;
   font-size: 11px;
@@ -283,6 +290,10 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 .status-pill.status-sold-out {
   background: #c6423a;
   color: white;
+}
+.status-pill.status-new {
+  background: #f3b6d2;
+  color: #6f143f;
 }
 .product-body { padding: 18px; }
 .product-title-row {

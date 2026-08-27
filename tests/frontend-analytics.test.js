@@ -335,6 +335,81 @@ test("catálogo separa visibilidade de disponibilidade por estoque", async () =>
   );
 });
 
+test("catálogo exibe novidade com cada status e prioriza sua ordenação", async () => {
+  const createProduct = ({
+    slug,
+    available = true,
+    stock = 5,
+    displayOrder,
+    isNew
+  }) => ({
+    id: `00000000-0000-4000-8000-${String(displayOrder).padStart(12, "0")}`,
+    slug,
+    name: slug,
+    price: 10,
+    description: `Produto ${slug}`,
+    image_url: `https://example.test/${slug}.webp`,
+    available,
+    is_new: isNew,
+    stock,
+    display_order: displayOrder
+  });
+  const harness = await createHarness({
+    productsData: [
+      createProduct({ slug: "comum", displayOrder: 1, isNew: false }),
+      createProduct({ slug: "nova-disponivel", displayOrder: 3, isNew: true }),
+      createProduct({ slug: "nova-acabando", stock: 2, displayOrder: 4, isNew: true }),
+      createProduct({ slug: "nova-esgotada", stock: 0, displayOrder: 5, isNew: true }),
+      createProduct({
+        slug: "nova-oculta",
+        available: false,
+        displayOrder: 2,
+        isNew: true
+      }),
+      createProduct({ slug: "sem-campo", displayOrder: 6 })
+    ]
+  });
+  const catalogHtml = harness.elements["product-grid"].innerHTML;
+
+  assert.match(
+    catalogHtml,
+    /nova-disponivel[\s\S]*?status-available[\s\S]*?status-new[\s\S]*?NOVIDADE ✨/
+  );
+  assert.match(
+    catalogHtml,
+    /nova-acabando[\s\S]*?status-low-stock[\s\S]*?status-new/
+  );
+  assert.match(
+    catalogHtml,
+    /nova-esgotada[\s\S]*?status-sold-out[\s\S]*?status-new/
+  );
+  assert.doesNotMatch(catalogHtml, /nova-oculta/);
+
+  assert.match(catalogHtml, /comum/);
+  assert.match(catalogHtml, /sem-campo/);
+  assert.equal((catalogHtml.match(/status-new/g) || []).length, 3);
+
+  assert.ok(catalogHtml.indexOf("nova-disponivel") < catalogHtml.indexOf("comum"));
+  assert.ok(catalogHtml.indexOf("nova-disponivel") < catalogHtml.indexOf("nova-acabando"));
+  assert.ok(catalogHtml.indexOf("nova-acabando") < catalogHtml.indexOf("nova-esgotada"));
+
+  const reordered = JSON.parse(vm.runInContext(`JSON.stringify(
+    sortProductsForDisplay([
+      { id: "primeiro", displayOrder: 1, is_new: false, stock: 5 },
+      { id: "segundo", displayOrder: 2, is_new: true, stock: 5 }
+    ]).map(product => product.id)
+  )`, harness.context));
+  const restored = JSON.parse(vm.runInContext(`JSON.stringify(
+    sortProductsForDisplay([
+      { id: "primeiro", displayOrder: 1, is_new: false, stock: 5 },
+      { id: "segundo", displayOrder: 2, is_new: false, stock: 5 }
+    ]).map(product => product.id)
+  )`, harness.context));
+
+  assert.deepEqual(reordered, ["segundo", "primeiro"]);
+  assert.deepEqual(restored, ["primeiro", "segundo"]);
+});
+
 test("fluxo do carrinho emite deltas, uma visualização por abertura e um checkout", async () => {
   const harness = await createHarness();
   const { analyticsCalls, context, elements } = harness;
