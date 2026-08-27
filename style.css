@@ -292,8 +292,8 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
   color: white;
 }
 .status-pill.status-new {
-  background: #F6C2D0;
-  color: #6F2D3A;
+  background: #FBE1EA;
+  color: #7A3B4B;
 }
 .product-body { padding: 18px; }
 .product-title-row {
