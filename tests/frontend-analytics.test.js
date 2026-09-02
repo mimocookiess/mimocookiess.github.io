@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { webcrypto } = require("node:crypto");
+const MimoStoreStatus = require("../store-status.js");
 
 const scriptSource = fs.readFileSync(
   path.join(__dirname, "..", "script.js"),
@@ -188,24 +189,7 @@ async function createHarness({ invoke, productsData = [] } = {}) {
         .filter(zone => zone.name.toLowerCase().includes(query.toLowerCase()))
         .slice(0, limit)
     },
-    MimoStoreStatus: {
-      STORE_MODES: {
-        OPEN: "open",
-        PAUSED: "paused",
-        CLOSED_TODAY: "closed_today"
-      },
-      STORE_TIME_ZONE: "America/Santarem",
-      getStoreDateTimeParts: () => ({
-        year: 2026,
-        month: 8,
-        day: 16,
-        hour: 12,
-        minute: 0
-      }),
-      getStoreState: settings => settings.mode,
-      normalizeStoreMode: value => value || "open",
-      toValidDate: () => null
-    },
+    MimoStoreStatus,
     supabaseClient: {
       from: table => table === "products" ? productsQuery : settingsQuery,
       async rpc(name) {
@@ -490,6 +474,100 @@ test("WhatsApp usa bairro, frete e total retornados pelo backend", async () => {
   assert.match(message, /\*Frete:\* R\$\s12,00/);
   assert.match(message, /\*Total:\* R\$\s32,00/);
   assert.doesNotMatch(message, /a confirmar|\+ frete/i);
+});
+
+test("WhatsApp inclui aviso da pausa com horário antes dos valores", async () => {
+  const { context } = await createHarness();
+  const message = vm.runInContext(`buildWhatsAppMessage({
+    orderNumber: 92,
+    customerName: "Cliente",
+    items: ["1x Tradicional — R$ 10,00"],
+    payment: "Pix",
+    delivery: "Entrega",
+    address: "Rua X, 123",
+    neighborhood: "Mapiri",
+    notes: "",
+    subtotal: 10,
+    deliveryFee: 12,
+    total: 22,
+    isTemporarilyPaused: true,
+    pauseReturnTime: "15h30"
+  })`, context);
+
+  const receivingBlock = "🛵 *ENTREGA*\n" +
+    "🏠 *Endereço:* Rua X, 123\n" +
+    "📌 *Bairro:* Mapiri";
+  const pauseBlock = "🍪 *Estamos em uma pausa rapidinha.*\n" +
+    "Voltamos às 15h30 e seu pedido será confirmado assim que retornarmos.";
+
+  assert.match(message, new RegExp(
+    `${receivingBlock.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n\\n` +
+    `${pauseBlock.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n\\n` +
+    "\\*Subtotal:\\*"
+  ));
+  assert.match(message, /\*Frete:\* R\$\s12,00/);
+  assert.match(message, /\*Total:\* R\$\s22,00/);
+});
+
+test("horário de retorno do WhatsApp usa formato natural da loja", async () => {
+  const { context } = await createHarness();
+
+  assert.equal(
+    vm.runInContext('formatLocalHour(new Date("2026-09-02T18:30:00Z"))', context),
+    "15h30"
+  );
+  assert.equal(
+    vm.runInContext('formatLocalHour(new Date("2026-09-02T19:00:00Z"))', context),
+    "16h"
+  );
+  assert.equal(
+    vm.runInContext('formatLocalHour(new Date("2026-09-02T12:05:00Z"))', context),
+    "9h05"
+  );
+});
+
+test("WhatsApp inclui aviso da pausa sem horário na retirada", async () => {
+  const { context } = await createHarness();
+  const message = vm.runInContext(`buildWhatsAppMessage({
+    orderNumber: 93,
+    customerName: "Cliente",
+    items: ["1x Tradicional — R$ 10,00"],
+    payment: "Pix",
+    delivery: "Retirada",
+    address: "",
+    neighborhood: "",
+    notes: "",
+    subtotal: 10,
+    deliveryFee: 0,
+    total: 10,
+    isTemporarilyPaused: true,
+    pauseReturnTime: null
+  })`, context);
+
+  assert.match(message, /🍪 \*Estamos em uma pausa rapidinha\.\*\nSeu pedido será confirmado assim que voltarmos\./);
+  assert.doesNotMatch(message, /Voltamos às|null|undefined/);
+  assert.doesNotMatch(message, /\*Frete:\*/);
+});
+
+test("WhatsApp não inclui aviso quando a loja está aberta", async () => {
+  const { context } = await createHarness();
+  const message = vm.runInContext(`buildWhatsAppMessage({
+    orderNumber: 94,
+    customerName: "Cliente",
+    items: ["1x Tradicional — R$ 10,00"],
+    payment: "Pix",
+    delivery: "Retirada",
+    address: "",
+    neighborhood: "",
+    notes: "",
+    subtotal: 10,
+    deliveryFee: 0,
+    total: 10,
+    isTemporarilyPaused: false,
+    pauseReturnTime: "15h30"
+  })`, context);
+
+  assert.doesNotMatch(message, /pausa rapidinha|Voltamos às/);
 });
 
 test("erro não emite order_created e retry reutiliza checkout_attempt_id", async () => {

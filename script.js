@@ -164,6 +164,8 @@ function buildWhatsAppMessage({
   subtotal,
   deliveryFee,
   total,
+  isTemporarilyPaused = false,
+  pauseReturnTime = "",
   includeEmojis = true
 }) {
   const emojiPrefix = name => includeEmojis
@@ -179,6 +181,7 @@ function buildWhatsAppMessage({
   const formattedSubtotal = BRL.format(subtotal);
   const formattedDeliveryFee = BRL.format(deliveryFee);
   const formattedTotal = BRL.format(total);
+  const normalizedPauseReturnTime = String(pauseReturnTime || "").trim();
   const receivingLines = delivery === "Entrega"
     ? [
         `${emojiPrefix("delivery")}*ENTREGA*`,
@@ -203,6 +206,16 @@ function buildWhatsAppMessage({
     "",
     ...receivingLines
   ];
+
+  if (isTemporarilyPaused) {
+    lines.push(
+      "",
+      `${WHATSAPP_EMOJIS.cookie} *Estamos em uma pausa rapidinha.*`,
+      normalizedPauseReturnTime
+        ? `Voltamos às ${normalizedPauseReturnTime} e seu pedido será confirmado assim que retornarmos.`
+        : "Seu pedido será confirmado assim que voltarmos."
+    );
+  }
 
   if (hasNotes) {
     lines.push(
@@ -1777,6 +1790,10 @@ form.addEventListener("submit", async event => {
       subtotal,
       deliveryFee,
       total,
+      isTemporarilyPaused: storeState === STORE_MODES.PAUSED,
+      pauseReturnTime: formatLocalHour(
+        toValidDate(storeSettings.returnTime)
+      ),
       includeEmojis: shouldIncludeWhatsAppEmojis()
     });
 
