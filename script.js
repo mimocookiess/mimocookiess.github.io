@@ -210,7 +210,7 @@ function buildWhatsAppMessage({
   if (isTemporarilyPaused) {
     lines.push(
       "",
-      `${WHATSAPP_EMOJIS.cookie} *Estamos em uma pausa rapidinha.*`,
+      `${emojiPrefix("cookie")}*Estamos em uma pausa rapidinha.*`,
       normalizedPauseReturnTime
         ? `Voltamos às ${normalizedPauseReturnTime} e seu pedido será confirmado assim que retornarmos.`
         : "Seu pedido será confirmado assim que voltarmos."

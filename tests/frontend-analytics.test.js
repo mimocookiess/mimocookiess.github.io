@@ -113,6 +113,7 @@ async function createHarness({ invoke, productsData = [] } = {}) {
   const payment = new FakeElement({ name: "payment", value: "Pix" });
   const analyticsCalls = [];
   const invokeBodies = [];
+  const openedUrls = [];
   const sequence = [];
   let invokeImplementation = invoke || (async () => ({
     data: {
@@ -232,7 +233,10 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     confirm: () => true,
     location: { href: "https://lojamimocookies.com.br/" },
     matchMedia: () => ({ matches: false }),
-    open() { sequence.push("whatsapp"); },
+    open(url) {
+      openedUrls.push(url);
+      sequence.push("whatsapp");
+    },
     requestAnimationFrame: callback => {
       callback();
       return 1;
@@ -250,9 +254,37 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     context,
     elements,
     invokeBodies,
+    openedUrls,
     sequence,
     setInvoke(nextInvoke) { invokeImplementation = nextInvoke; }
   };
+}
+
+function buildWhatsAppTestMessage(context, overrides = {}) {
+  const options = {
+    orderNumber: 9990,
+    customerName: "Cliente de teste",
+    items: ["1x Tradicional — R$ 10,00"],
+    payment: "Pix",
+    delivery: "Entrega",
+    address: "Endereço de teste",
+    neighborhood: "Bairro de teste",
+    notes: "Observação de teste",
+    subtotal: 10,
+    deliveryFee: 12,
+    total: 22,
+    ...overrides
+  };
+
+  return vm.runInContext(
+    `buildWhatsAppMessage(${JSON.stringify(options)})`,
+    context
+  );
+}
+
+function createIPhoneUserAgent(browser) {
+  return "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) " +
+    `AppleWebKit/605.1.15 ${browser} Mobile/15E148 Safari/604.1`;
 }
 
 test("catálogo separa visibilidade de disponibilidade por estoque", async () => {
@@ -476,6 +508,45 @@ test("WhatsApp usa bairro, frete e total retornados pelo backend", async () => {
   assert.doesNotMatch(message, /a confirmar|\+ frete/i);
 });
 
+test("emojis do WhatsApp têm code points válidos", async () => {
+  const { context } = await createHarness();
+  const codePoints = vm.runInContext(`Object.fromEntries(
+    Object.entries(WHATSAPP_EMOJIS).map(([name, emoji]) => [
+      name,
+      Array.from(emoji, character => character.codePointAt(0))
+    ])
+  )`, context);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(codePoints)), {
+    cookie: [0x1F36A],
+    heart: [0x1F497],
+    customer: [0x1F464],
+    cart: [0x1F6D2],
+    payment: [0x1F4B3],
+    location: [0x1F4CD],
+    pin: [0x1F4CC],
+    home: [0x1F3E0],
+    delivery: [0x1F6F5],
+    notes: [0x1F4DD]
+  });
+});
+
+test("mensagem normal inclui ou remove todos os emojis configurados", async () => {
+  const { context } = await createHarness();
+  const withEmojis = buildWhatsAppTestMessage(context, {
+    includeEmojis: true
+  });
+  const withoutEmojis = buildWhatsAppTestMessage(context, {
+    includeEmojis: false
+  });
+
+  for (const emoji of ["🍪", "💗", "👤", "🛒", "💳", "🛵", "🏠", "📌", "📝"]) {
+    assert.ok(withEmojis.includes(emoji));
+    assert.ok(!withoutEmojis.includes(emoji));
+  }
+  assert.doesNotMatch(withoutEmojis, /[\u{1F300}-\u{1FAFF}]/u);
+});
+
 test("WhatsApp inclui aviso da pausa com horário antes dos valores", async () => {
   const { context } = await createHarness();
   const message = vm.runInContext(`buildWhatsAppMessage({
@@ -547,6 +618,98 @@ test("WhatsApp inclui aviso da pausa sem horário na retirada", async () => {
   assert.match(message, /🍪 \*Estamos em uma pausa rapidinha\.\*\nSeu pedido será confirmado assim que voltarmos\./);
   assert.doesNotMatch(message, /Voltamos às|null|undefined/);
   assert.doesNotMatch(message, /\*Frete:\*/);
+});
+
+test("WhatsApp em pausa não contorna includeEmojis false", async () => {
+  const { context } = await createHarness();
+  const message = buildWhatsAppTestMessage(context, {
+    delivery: "Retirada",
+    address: "",
+    neighborhood: "",
+    deliveryFee: 0,
+    total: 10,
+    isTemporarilyPaused: true,
+    pauseReturnTime: "15h30",
+    includeEmojis: false
+  });
+
+  assert.match(message, /\*Estamos em uma pausa rapidinha\.\*/);
+  assert.doesNotMatch(message, /[\u{1F300}-\u{1FAFF}]/u);
+});
+
+test("URL entregue ao WhatsApp preserva emojis e Unicode válido", async () => {
+  const harness = await createHarness();
+  const { context, elements, openedUrls } = harness;
+
+  context.navigator.userAgent =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) " +
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 " +
+    "Mobile/15E148 Safari/604.1";
+  vm.runInContext('addItem("tradicional"); turnstileToken = "token";', context);
+  elements["customer-name"].value = "Cliente de teste";
+  await elements["checkout-form"].dispatch("submit");
+
+  assert.equal(openedUrls.length, 1);
+  assert.match(openedUrls[0], /^https:\/\/wa\.me\/5593000000000\?text=/);
+  for (const encodedEmoji of [
+    "%F0%9F%8D%AA",
+    "%F0%9F%92%97",
+    "%F0%9F%91%A4",
+    "%F0%9F%9B%92",
+    "%F0%9F%92%B3",
+    "%F0%9F%9B%B5",
+    "%F0%9F%8F%A0",
+    "%F0%9F%93%8C"
+  ]) {
+    assert.ok(openedUrls[0].includes(encodedEmoji), encodedEmoji);
+  }
+  assert.doesNotMatch(openedUrls[0], /�|%EF%BF%BD/i);
+
+  const message = new URL(openedUrls[0]).searchParams.get("text");
+  assert.match(message, /Olá!.*🍪💗/u);
+  assert.equal(message.isWellFormed(), true);
+  assert.doesNotMatch(message, /�/);
+});
+
+test("detecção de emojis cobre browsers e webview móveis sem distingui-los", async () => {
+  const { context } = await createHarness();
+  const desktopSafariUserAgent =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+    "AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15";
+  const cases = [
+    ["iPhone Safari", createIPhoneUserAgent("Version/18.6"), 0, true],
+    ["iPhone Chrome", createIPhoneUserAgent("CriOS/140.0"), 0, true],
+    ["iPhone Firefox", createIPhoneUserAgent("FxiOS/142.0"), 0, true],
+    [
+      "Instagram webview",
+      createIPhoneUserAgent("Instagram/395.0.0"),
+      0,
+      true
+    ],
+    [
+      "Android Chrome",
+      "Mozilla/5.0 (Linux; Android 15; Mobile) Chrome/140.0 Mobile",
+      0,
+      true
+    ],
+    ["desktop Safari", desktopSafariUserAgent, 0, false],
+    ["iPadOS desktop UA", desktopSafariUserAgent, 5, true]
+  ];
+
+  for (const [name, userAgent, maxTouchPoints, expected] of cases) {
+    context.navigator.userAgent = userAgent;
+    context.navigator.maxTouchPoints = maxTouchPoints;
+    delete context.navigator.userAgentData;
+    assert.equal(vm.runInContext("shouldIncludeWhatsAppEmojis()", context), expected, name);
+  }
+
+  context.navigator.userAgent = createIPhoneUserAgent("Version/18.6");
+  context.navigator.userAgentData = { mobile: false };
+  assert.equal(vm.runInContext("shouldIncludeWhatsAppEmojis()", context), false);
+
+  context.navigator.userAgent = desktopSafariUserAgent;
+  context.navigator.userAgentData = { mobile: true };
+  assert.equal(vm.runInContext("shouldIncludeWhatsAppEmojis()", context), true);
 });
 
 test("WhatsApp não inclui aviso quando a loja está aberta", async () => {
