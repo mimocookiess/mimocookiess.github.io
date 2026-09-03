@@ -125,4 +125,5 @@ Quando os relatórios forem implementados, pedidos com status `completed` devem 
 
 - 1ª cookieteria de Santarém
 - Cookies artesanais assados na hora
-- Funcionamento: 10h às 21h
+- Terça a domingo: 11h às 19h
+- Segunda: fechado

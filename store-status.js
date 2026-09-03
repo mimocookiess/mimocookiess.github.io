@@ -101,20 +101,26 @@
       `T${pad(parts.hour)}:${pad(parts.minute)}`;
   }
 
-  function getTomorrowAtTen(now = new Date()) {
+  function getNextRegularOpening(now = new Date()) {
     const parts = getStoreDateTimeParts(now);
 
     if (!parts) return null;
 
-    const tomorrow = new Date(Date.UTC(
+    const currentStoreDate = new Date(Date.UTC(
       parts.year,
       parts.month - 1,
-      parts.day + 1
+      parts.day
+    ));
+    const daysUntilNextOpening = currentStoreDate.getUTCDay() === 0 ? 2 : 1;
+    const nextOpeningDate = new Date(Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day + daysUntilNextOpening
     ));
     const pad = number => String(number).padStart(2, "0");
-    const localValue = `${tomorrow.getUTCFullYear()}-` +
-      `${pad(tomorrow.getUTCMonth() + 1)}-` +
-      `${pad(tomorrow.getUTCDate())}T10:00`;
+    const localValue = `${nextOpeningDate.getUTCFullYear()}-` +
+      `${pad(nextOpeningDate.getUTCMonth() + 1)}-` +
+      `${pad(nextOpeningDate.getUTCDate())}T11:00`;
 
     return storeLocalDateTimeToDate(localValue);
   }
@@ -160,7 +166,7 @@
     buildStoreSettingsUpdate,
     getStoreDateTimeParts,
     getStoreState,
-    getTomorrowAtTen,
+    getNextRegularOpening,
     normalizeStoreMode,
     storeLocalDateTimeToDate,
     toValidDate,
