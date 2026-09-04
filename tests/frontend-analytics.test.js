@@ -10,6 +10,14 @@ const scriptSource = fs.readFileSync(
   path.join(__dirname, "..", "script.js"),
   "utf8"
 );
+const indexSource = fs.readFileSync(
+  path.join(__dirname, "..", "index.html"),
+  "utf8"
+);
+const styleSource = fs.readFileSync(
+  path.join(__dirname, "..", "style.css"),
+  "utf8"
+);
 
 class FakeElement {
   constructor({ id = "", name = "", value = "" } = {}) {
@@ -20,12 +28,16 @@ class FakeElement {
     this.attributes = new Map();
     this.hidden = false;
     this.disabled = false;
+    this.focused = false;
+    this.layoutHeight = 0;
     this.innerHTML = "";
     this.textContent = "";
     this.required = false;
+    const styleProperties = new Map();
     this.style = {
-      removeProperty() {},
-      setProperty() {}
+      properties: styleProperties,
+      removeProperty(name) { styleProperties.delete(name); },
+      setProperty(name, value) { styleProperties.set(name, value); }
     };
     const classes = new Set();
     this.classList = {
@@ -51,7 +63,10 @@ class FakeElement {
 
   append() {}
   closest() { return null; }
-  focus() {}
+  focus() { this.focused = true; }
+  getBoundingClientRect() {
+    return { bottom: this.layoutHeight, height: this.layoutHeight, top: 0 };
+  }
   querySelector() { return null; }
   querySelectorAll() { return []; }
   removeAttribute() {}
@@ -103,12 +118,17 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     "store-pause-title",
     "store-pause-return",
     "store-pause-message",
+    "store-pause-compact-message",
+    "store-pause-close",
+    "store-pause-announcement",
     "cart-pause-notice",
     "cart-pause-title",
     "cart-pause-message"
   ].map(id => [id, new FakeElement({ id })]));
   elements["customer-address"].value = "Rua de teste, 123";
+  elements["cart-fab"].layoutHeight = 72;
   elements["delivery-neighborhood-options"].hidden = true;
+  const brand = new FakeElement();
   const delivery = new FakeElement({ name: "delivery", value: "Entrega" });
   const payment = new FakeElement({ name: "payment", value: "Pix" });
   const analyticsCalls = [];
@@ -129,12 +149,15 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     error: null
   }));
   const body = new FakeElement();
+  const documentElement = new FakeElement();
   const document = {
     body,
+    documentElement,
     createElement: () => new FakeElement(),
     head: { append() {} },
     addEventListener() {},
     querySelector(selector) {
+      if (selector === ".brand") return brand;
       if (selector === 'input[name="delivery"]:checked') return delivery;
       if (selector === 'input[name="payment"]:checked') return payment;
       return elements[selector.replace(/^#/, "")] || null;
@@ -256,6 +279,8 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     invokeBodies,
     openedUrls,
     sequence,
+    brand,
+    documentElement,
     setInvoke(nextInvoke) { invokeImplementation = nextInvoke; }
   };
 }
@@ -286,6 +311,215 @@ function createIPhoneUserAgent(browser) {
   return "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) " +
     `AppleWebKit/605.1.15 ${browser} Mobile/15E148 Safari/604.1`;
 }
+
+test("aviso público fica dentro do hero e fora do fluxo em todos os breakpoints", () => {
+  const heroStart = indexSource.indexOf('<header class="hero"');
+  const noticePosition = indexSource.indexOf('id="store-pause-banner"');
+  const heroEnd = indexSource.indexOf("</header>", heroStart);
+  const tabletStyles = styleSource.slice(
+    styleSource.indexOf("@media (max-width: 960px)"),
+    styleSource.indexOf("@media (max-width: 620px)")
+  );
+  const landscapeStyles = styleSource.slice(
+    styleSource.indexOf("@media (min-width: 621px)"),
+    styleSource.indexOf("@media (max-width: 620px)")
+  );
+
+  assert.ok(heroStart >= 0 && noticePosition > heroStart && noticePosition < heroEnd);
+  assert.match(
+    styleSource,
+    /\.store-pause-card\s*\{[^}]*position:\s*absolute;/s
+  );
+  assert.match(
+    tabletStyles,
+    /\.store-pause-card\s*\{[^}]*position:\s*fixed;/s
+  );
+  assert.match(tabletStyles, /\.store-pause-card\s*\{[^}]*max-height:\s*calc\(/s);
+  assert.match(
+    tabletStyles,
+    /\.store-pause-card\s*\{[^}]*max-height:[^}]*--cart-confirmation-height/s
+  );
+  assert.match(tabletStyles, /\.cart-confirmation\s*\{[^}]*top:\s*calc\(/s);
+  assert.match(tabletStyles, /\.cart-confirmation\s*\{[^}]*bottom:\s*auto;/s);
+  assert.match(styleSource, /--floating-control-bottom:[^;]*safe-area-inset-bottom/);
+  assert.match(
+    tabletStyles,
+    /\.store-pause-card\s*\{[^}]*bottom:[^}]*--store-pause-fab-gap/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-card\s*\{[^}]*top:\s*calc\([^}]*bottom:\s*auto;/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-card\s*\{[^}]*left:\s*calc\(50% - 16px\);[^}]*width:\s*min\(480px,\s*calc\(100vw - 344px\)\);/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-card\s*\{[^}]*gap:\s*8px;[^}]*padding:\s*8px 8px 8px 14px;/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-status\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-status h2\s*\{[^}]*font-size:\s*16px;/s
+  );
+  assert.match(
+    landscapeStyles,
+    /\.store-pause-close\s*\{[^}]*align-self:\s*start;/s
+  );
+  assert.match(styleSource, /\.store-pause-status\s*\{[^}]*min-height:\s*0;/s);
+  assert.match(
+    styleSource,
+    /\.store-pause-details\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+  );
+  assert.match(
+    tabletStyles,
+    /\[data-store-state="paused"\][^}]*#store-pause-message\s*\{[^}]*display:\s*none;/s
+  );
+  assert.match(
+    tabletStyles,
+    /\.store-pause-compact-message:not\(\[hidden\]\)\s*\{[^}]*display:\s*block;[^}]*font-weight:\s*400;/s
+  );
+});
+
+test("card de status preserva OPEN, PAUSED e CLOSED_TODAY e permite dispensa visual", async () => {
+  const { brand, context, documentElement, elements } = await createHarness();
+  const announcementWrites = [];
+  let announcementText = elements["store-pause-announcement"].textContent;
+
+  Object.defineProperty(elements["store-pause-announcement"], "textContent", {
+    configurable: true,
+    get: () => announcementText,
+    set: value => {
+      announcementText = value;
+      announcementWrites.push({
+        cardHidden: elements["store-pause-banner"].hidden,
+        value
+      });
+    }
+  });
+
+  vm.runInContext(`
+    storeSettings = {
+      isPaused: true,
+      mode: MimoStoreStatus.STORE_MODES.PAUSED,
+      returnTime: null,
+      pauseMessage: "Voltamos em breve."
+    };
+    renderStoreSettings();
+  `, context);
+
+  assert.equal(elements["store-pause-banner"].hidden, false);
+  assert.equal(elements["store-pause-title"].textContent, "🍪 Pausa rapidinha!");
+  assert.equal(elements["store-pause-message"].textContent, "Voltamos em breve.");
+  assert.equal(elements["store-pause-compact-message"].textContent, "Voltamos logo.");
+  assert.equal(elements["store-pause-compact-message"].hidden, false);
+  assert.equal(
+    elements["store-pause-banner"].attributes.get("data-store-state"),
+    MimoStoreStatus.STORE_MODES.PAUSED
+  );
+  assert.equal(elements["cart-pause-notice"].hidden, false);
+  assert.match(elements["cart-pause-message"].textContent, /Voltamos em breve\./);
+  assert.equal(documentElement.style.properties.get("--cart-fab-height"), "72px");
+  assert.ok(
+    announcementWrites
+      .filter(write => write.value)
+      .every(write => write.cardHidden === false)
+  );
+
+  vm.runInContext(`
+    storeSettings.returnTime = "2099-09-04T14:00:00.000Z";
+    renderStoreSettings();
+  `, context);
+
+  const formattedReturnTime = vm.runInContext(
+    "getPauseDetails().formattedReturnTime",
+    context
+  );
+  assert.equal(
+    elements["store-pause-compact-message"].textContent,
+    `Voltamos ${formattedReturnTime}.`
+  );
+  assert.match(
+    elements["store-pause-return"].textContent,
+    /^Retorno previsto:/
+  );
+  assert.equal(elements["store-pause-message"].textContent, "Voltamos em breve.");
+
+  const announcedValues = announcementWrites.filter(write => write.value);
+  vm.runInContext("renderStoreSettings();", context);
+  assert.equal(
+    announcementWrites.filter(write => write.value).length,
+    announcedValues.length
+  );
+
+  elements["cart-fab"].layoutHeight = 96;
+  vm.runInContext(`
+    cartConfirmation.layoutHeight = 52;
+    syncFloatingControlHeights();
+  `, context);
+  assert.equal(documentElement.style.properties.get("--cart-fab-height"), "96px");
+  assert.equal(
+    documentElement.style.properties.get("--cart-confirmation-height"),
+    "52px"
+  );
+
+  await elements["store-pause-close"].dispatch("click", { detail: 0 });
+
+  assert.equal(elements["store-pause-banner"].hidden, true);
+  assert.equal(elements["cart-pause-notice"].hidden, false);
+  assert.equal(brand.focused, true);
+  assert.equal(elements["store-pause-announcement"].textContent, "");
+  assert.equal(
+    vm.runInContext("getStoreState()", context),
+    MimoStoreStatus.STORE_MODES.PAUSED
+  );
+
+  vm.runInContext("renderStoreSettings();", context);
+  assert.equal(elements["store-pause-banner"].hidden, true);
+
+  vm.runInContext(`
+    storeSettings = {
+      isPaused: true,
+      mode: MimoStoreStatus.STORE_MODES.CLOSED_TODAY,
+      returnTime: "2099-09-04T14:00:00.000Z",
+      pauseMessage: ""
+    };
+    storePauseDismissed = false;
+    renderStoreSettings();
+  `, context);
+
+  assert.equal(elements["store-pause-banner"].hidden, false);
+  assert.equal(elements["store-pause-title"].textContent, "🍪 Por hoje, encerramos!");
+  assert.equal(elements["store-pause-return"].hidden, true);
+  assert.equal(
+    elements["store-pause-message"].textContent,
+    vm.runInContext("getClosedDetails().returnText", context)
+  );
+  assert.equal(elements["store-pause-message"].hidden, false);
+  assert.equal(elements["store-pause-compact-message"].hidden, true);
+  assert.equal(elements["cart-pause-notice"].hidden, false);
+
+  vm.runInContext(`
+    storeSettings = {
+      isPaused: false,
+      mode: MimoStoreStatus.STORE_MODES.OPEN,
+      returnTime: null,
+      pauseMessage: ""
+    };
+    renderStoreSettings();
+  `, context);
+
+  assert.equal(elements["store-pause-banner"].hidden, true);
+  assert.equal(elements["cart-pause-notice"].hidden, true);
+  assert.equal(
+    vm.runInContext("getStoreState()", context),
+    MimoStoreStatus.STORE_MODES.OPEN
+  );
+});
 
 test("catálogo separa visibilidade de disponibilidade por estoque", async () => {
   const createProduct = ({ slug, available, stock, displayOrder }) => ({

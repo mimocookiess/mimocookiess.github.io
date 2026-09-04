@@ -35,6 +35,9 @@ let storeSettings = {
   pauseMessage: ""
 };
 let storeStateTimer = null;
+let storePauseDismissed = false;
+let storePauseAnnouncementFrame = null;
+let lastStorePauseAnnouncement = "";
 let productsLoadedFromSupabase = false;
 
 const TURNSTILE_ACTION = "create_order";
@@ -129,6 +132,14 @@ const storePauseBanner = document.querySelector("#store-pause-banner");
 const storePauseTitle = document.querySelector("#store-pause-title");
 const storePauseReturn = document.querySelector("#store-pause-return");
 const storePauseMessage = document.querySelector("#store-pause-message");
+const storePauseCompactMessage = document.querySelector(
+  "#store-pause-compact-message"
+);
+const storePauseCloseButton = document.querySelector("#store-pause-close");
+const storePauseAnnouncement = document.querySelector(
+  "#store-pause-announcement"
+);
+const brandLink = document.querySelector(".brand");
 const cartPauseNotice = document.querySelector("#cart-pause-notice");
 const cartPauseTitle = document.querySelector("#cart-pause-title");
 const cartPauseMessage = document.querySelector("#cart-pause-message");
@@ -335,20 +346,81 @@ function getPauseDetails() {
   };
 }
 
+function clearStorePauseAnnouncement() {
+  if (storePauseAnnouncementFrame !== null) {
+    window.cancelAnimationFrame(storePauseAnnouncementFrame);
+    storePauseAnnouncementFrame = null;
+  }
+
+  storePauseAnnouncement.textContent = "";
+  lastStorePauseAnnouncement = "";
+}
+
+function showStorePauseCard({
+  state,
+  title,
+  returnText = "",
+  message = "",
+  compactMessage = ""
+}) {
+  storePauseBanner.setAttribute("data-store-state", state);
+  storePauseTitle.textContent = title;
+  storePauseReturn.textContent = returnText;
+  storePauseReturn.hidden = !returnText;
+  storePauseMessage.textContent = message;
+  storePauseMessage.hidden = !message;
+  storePauseCompactMessage.textContent = compactMessage;
+  storePauseCompactMessage.hidden = !compactMessage;
+
+  if (storePauseDismissed) {
+    storePauseBanner.hidden = true;
+    clearStorePauseAnnouncement();
+    return;
+  }
+
+  storePauseBanner.hidden = false;
+
+  const announcement = [title, returnText, message]
+    .filter(Boolean)
+    .join(" ");
+
+  if (
+    announcement === lastStorePauseAnnouncement &&
+    storePauseAnnouncement.textContent === announcement
+  ) {
+    return;
+  }
+
+  if (storePauseAnnouncementFrame !== null) {
+    window.cancelAnimationFrame(storePauseAnnouncementFrame);
+  }
+
+  storePauseAnnouncement.textContent = "";
+  storePauseAnnouncementFrame = window.requestAnimationFrame(() => {
+    storePauseAnnouncementFrame = null;
+
+    if (storePauseBanner.hidden || storePauseDismissed) return;
+
+    storePauseAnnouncement.textContent = announcement;
+    lastStorePauseAnnouncement = announcement;
+  });
+}
+
 function renderStoreSettings() {
   const storeState = getStoreState();
   const isPaused = storeState !== STORE_MODES.OPEN;
-  const { message, returnText } = getPauseDetails();
+  const { formattedReturnTime, message, returnText } = getPauseDetails();
 
   if (storeStateTimer !== null) {
     window.clearTimeout(storeStateTimer);
     storeStateTimer = null;
   }
 
-  storePauseBanner.hidden = !isPaused;
   cartPauseNotice.hidden = !isPaused;
 
   if (!isPaused) {
+    storePauseBanner.hidden = true;
+    clearStorePauseAnnouncement();
     storeSettings.isPaused = false;
     storeSettings.mode = STORE_MODES.OPEN;
     storeSettings.returnTime = null;
@@ -372,28 +444,35 @@ function renderStoreSettings() {
   if (storeState === STORE_MODES.CLOSED_TODAY) {
     const { title, returnText: closedReturnText } = getClosedDetails();
 
-    storePauseTitle.textContent = title;
-    storePauseReturn.textContent = "";
-    storePauseReturn.hidden = true;
-    storePauseMessage.textContent = closedReturnText;
-    storePauseMessage.hidden = !closedReturnText;
     cartPauseTitle.textContent = title;
     cartPauseMessage.textContent = [closedReturnText, CLOSED_STORE_MESSAGE]
       .filter(Boolean)
       .join(" ");
+    showStorePauseCard({
+      state: STORE_MODES.CLOSED_TODAY,
+      title,
+      message: closedReturnText
+    });
     refreshWhatsappButton();
     return;
   }
 
-  storePauseTitle.textContent = `${STORE_NOTICE_ICON} Pausa rapidinha!`;
-  storePauseReturn.textContent = returnText;
-  storePauseReturn.hidden = !returnText;
-  storePauseMessage.textContent = message;
-  storePauseMessage.hidden = false;
+  const title = `${STORE_NOTICE_ICON} Pausa rapidinha!`;
+  const compactMessage = formattedReturnTime
+    ? `Voltamos ${formattedReturnTime}.`
+    : "Voltamos logo.";
+
   cartPauseTitle.textContent = `${STORE_NOTICE_ICON} Atendimento em pausa`;
   cartPauseMessage.textContent = [returnText, message]
     .filter(Boolean)
     .join(" ");
+  showStorePauseCard({
+    state: STORE_MODES.PAUSED,
+    title,
+    returnText,
+    message,
+    compactMessage
+  });
   refreshWhatsappButton();
 }
 
@@ -425,18 +504,58 @@ async function loadStoreSettings() {
   }
 }
 
+storePauseCloseButton.addEventListener("click", event => {
+  if (event.detail === 0) brandLink?.focus({ preventScroll: true });
+
+  storePauseDismissed = true;
+  storePauseBanner.hidden = true;
+  clearStorePauseAnnouncement();
+});
+
+function syncFloatingControlHeight(element, propertyName) {
+  const height = element.getBoundingClientRect?.().height;
+
+  if (!Number.isFinite(height) || height <= 0) return;
+
+  document.documentElement?.style.setProperty(
+    propertyName,
+    `${Math.ceil(height)}px`
+  );
+}
+
+function syncFloatingControlHeights() {
+  syncFloatingControlHeight(cartFab, "--cart-fab-height");
+  syncFloatingControlHeight(
+    cartConfirmation,
+    "--cart-confirmation-height"
+  );
+}
+
 const cartConfirmation = document.createElement("div");
 cartConfirmation.className = "cart-confirmation";
 cartConfirmation.setAttribute("role", "status");
 cartConfirmation.setAttribute("aria-live", "polite");
 cartConfirmation.setAttribute("aria-atomic", "true");
 document.body.append(cartConfirmation);
+
+syncFloatingControlHeights();
+window.addEventListener?.("resize", syncFloatingControlHeights);
+
+if (typeof window.ResizeObserver === "function") {
+  const floatingControlsResizeObserver = new window.ResizeObserver(
+    syncFloatingControlHeights
+  );
+  floatingControlsResizeObserver.observe(cartFab);
+  floatingControlsResizeObserver.observe(cartConfirmation);
+}
+
 cartConfirmation.addEventListener("transitionend", event => {
   if (
     event.propertyName === "opacity" &&
     !cartConfirmation.classList.contains("visible")
   ) {
     cartConfirmation.textContent = "";
+    syncFloatingControlHeights();
   }
 });
 
@@ -448,6 +567,7 @@ function showCartConfirmation(productName) {
 
   cartConfirmationFrame = window.requestAnimationFrame(() => {
     cartConfirmation.textContent = `${productName} adicionado ao carrinho.`;
+    syncFloatingControlHeights();
     cartConfirmation.classList.add("visible");
 
     cartConfirmationTimeout = window.setTimeout(() => {

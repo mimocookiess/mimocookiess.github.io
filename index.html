@@ -119,25 +119,35 @@
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/favicon-192x192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/favicon-512x512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
-  <section
-    class="store-pause-banner"
-    id="store-pause-banner"
-    role="status"
-    aria-live="polite"
-    aria-atomic="true"
-    hidden
-  >
-    <div class="shell store-pause-content">
-      <h2 id="store-pause-title">🍪 Pausa rapidinha!</h2>
-      <p id="store-pause-return" hidden></p>
-      <p id="store-pause-message"></p>
-    </div>
-  </section>
-
   <header class="hero" id="inicio">
+    <p
+      class="store-pause-announcement"
+      id="store-pause-announcement"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></p>
+
+    <aside class="store-pause-card" id="store-pause-banner" hidden>
+      <div class="store-pause-status">
+        <h2 id="store-pause-title">🍪 Pausa rapidinha!</h2>
+        <div class="store-pause-details">
+          <p id="store-pause-return" hidden></p>
+          <p id="store-pause-message"></p>
+          <p class="store-pause-compact-message" id="store-pause-compact-message" hidden></p>
+        </div>
+      </div>
+      <button
+        class="store-pause-close"
+        id="store-pause-close"
+        type="button"
+        aria-label="Fechar aviso sobre o atendimento"
+      >×</button>
+    </aside>
+
     <nav class="nav shell">
       <a class="brand" href="#inicio" aria-label="Mimo Cookies, início">
         <img class="brand-logo" src="assets/images/logo.png" alt="Logo da Mimo Cookies" width="150" height="150" decoding="async">
@@ -469,6 +479,6 @@
 <script src="products.js?v=5"></script>
 <script src="store-status.js?v=2"></script>
 <script src="delivery-zones.js?v=1"></script>
-<script src="script.js?v=27"></script>
+<script src="script.js?v=28"></script>
 </body>
 </html>
