@@ -130,6 +130,33 @@ a { color: inherit; }
     radial-gradient(circle at 100% 16%, rgba(232, 189, 208, .55), transparent 28%),
     linear-gradient(180deg, #fff8fb, #fff2f7);
 }
+/* Decoracao temporaria do Saire: arte original, fora do fluxo do hero. */
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 50%;
+  aspect-ratio: 836 / 810;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: .24;
+}
+.hero::before {
+  left: 0;
+  background-image: url("assets/images/saire-hero-esquerda.webp");
+}
+.hero::after {
+  right: 0;
+  background-image: url("assets/images/saire-hero-direita.webp");
+}
+.hero > .nav,
+.hero > .hero-content {
+  position: relative;
+  z-index: 1;
+}
 .nav {
   min-height: 94px;
   display: flex;
@@ -845,6 +872,10 @@ footer a { font-weight: 700; }
 }
 
 @media (max-width: 960px) {
+  .hero::before,
+  .hero::after { width: 360px; }
+  .hero::before { left: -50px; }
+  .hero::after { right: -50px; }
   .store-pause-card {
     position: fixed;
     top: auto;
@@ -897,6 +928,8 @@ footer a { font-weight: 700; }
 }
 
 @media (min-width: 621px) and (max-width: 960px) and (max-height: 500px) {
+  .hero::before,
+  .hero::after { width: 290px; }
   .store-pause-card {
     top: calc(10px + env(safe-area-inset-top, 0px));
     bottom: auto;
@@ -929,6 +962,10 @@ footer a { font-weight: 700; }
 }
 
 @media (max-width: 620px) {
+  .hero::before,
+  .hero::after { width: 240px; }
+  .hero::before { left: -60px; }
+  .hero::after { right: -60px; }
   .shell { width: min(100% - 22px, 1160px); }
   .store-pause-card {
     width: calc(100% - 22px);
