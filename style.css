@@ -964,7 +964,7 @@ footer a { font-weight: 700; }
 @media (max-width: 620px) {
   .hero::before,
   .hero::after { width: 240px; }
-  .hero::before { left: -60px; }
+  .hero::before { top: 32px; left: -60px; }
   .hero::after { right: -60px; }
   .shell { width: min(100% - 22px, 1160px); }
   .store-pause-card {
