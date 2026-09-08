@@ -131,6 +131,7 @@ a { color: inherit; }
     linear-gradient(180deg, #fff8fb, #fff2f7);
 }
 /* Decoracao temporaria do Saire: arte original, fora do fluxo do hero. */
+.hero-ribbons { display: none; }
 .hero::before,
 .hero::after {
   content: "";
@@ -963,9 +964,47 @@ footer a { font-weight: 700; }
 
 @media (max-width: 620px) {
   .hero::before,
-  .hero::after { width: 240px; }
-  .hero::before { top: 32px; left: -60px; }
-  .hero::after { right: -60px; }
+  .hero::after { top: 64px; width: 240px; opacity: .29; }
+  /* Recortes separam os botos das fitinhas nos assets originais. */
+  .hero::before {
+    left: -60px;
+    clip-path: polygon(0 22%, 12% 22%, 12% 31%, 26% 31%, 29% 26%, 60% 20%, 100% 20%, 100% 100%, 0 100%);
+  }
+  .hero::after {
+    right: -60px;
+    clip-path: polygon(0 0, 36% 0, 36% 23%, 50% 23%, 50% 32%, 70% 32%, 79% 40%, 100% 40%, 100% 100%, 0 100%);
+  }
+  .hero-ribbons {
+    display: block;
+    position: absolute;
+    inset: 0 0 auto;
+    height: 140px;
+    z-index: 0;
+    pointer-events: none;
+    opacity: .29;
+  }
+  .hero-ribbons::before,
+  .hero-ribbons::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: calc(50% + 230px);
+    aspect-ratio: 836 / 810;
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+  .hero-ribbons::before {
+    left: -65px;
+    background-image: url("assets/images/saire-hero-esquerda.webp");
+    clip-path: polygon(12% 0, 61% 0, 61% 20%, 43% 20%, 43% 25%, 27% 25%, 27% 31%, 12% 31%, 15% 20%, 15% 10%);
+  }
+  .hero-ribbons::after {
+    right: -65px;
+    background-image: url("assets/images/saire-hero-direita.webp");
+    clip-path: polygon(37% 0, 100% 0, 100% 39%, 79% 39%, 70% 31%, 51% 31%, 51% 22%, 37% 22%);
+    transform: scaleY(.8);
+    transform-origin: top;
+  }
   .shell { width: min(100% - 22px, 1160px); }
   .store-pause-card {
     width: calc(100% - 22px);
