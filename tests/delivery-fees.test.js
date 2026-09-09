@@ -29,6 +29,10 @@ const completedOrderFixMigration = fs.readFileSync(path.join(
   "migrations",
   "20260826210000_allow_actual_delivery_fee_on_completed_orders.sql"
 ), "utf8");
+const targetedFeesMigration = fs.readFileSync(path.join(
+  root, "supabase", "migrations",
+  "20260909201013_update_aparecida_liberdade_delivery_fees.sql"
+), "utf8");
 const edgeFunction = fs.readFileSync(path.join(
   root,
   "supabase",
@@ -46,7 +50,7 @@ const expectedFees = new Map(Object.entries({
   "Aldeia": 9.00,
   "Alvorada": 17.00,
   "Amparo": 16.20,
-  "Aparecida": 7.20,
+  "Aparecida": 9.00,
   "Área Verde": 10.00,
   "Cambuquira": 17.00,
   "Caranazal": 9.00,
@@ -66,7 +70,7 @@ const expectedFees = new Map(Object.entries({
   "Juá": 12.60,
   "Jutaí": 16.20,
   "Laguinho": 9.00,
-  "Liberdade": 7.20,
+  "Liberdade": 9.00,
   "Livramento": 17.00,
   "Maicá": 16.20,
   "Mapiri": 12.00,
@@ -160,12 +164,35 @@ test("migration de aumento define explicitamente as 52 tarifas finais", () => {
 
   for (const zone of zones) {
     assert.equal(expectedFees.has(zone.name), true, zone.name);
-    assert.equal(feesBySlug.get(zone.slug), expectedFees.get(zone.name), zone.name);
+    const previousFee = ["aparecida", "liberdade"].includes(zone.slug)
+      ? 7.20 : expectedFees.get(zone.name);
+    assert.equal(feesBySlug.get(zone.slug), previousFee, zone.name);
   }
 
   assert.match(increasedFeesMigration,
     /v_zone_count\s*<>\s*52[\s\S]*v_updated_count\s*<>\s*52/iu);
   assert.doesNotMatch(increasedFeesMigration, /fee\s*=\s*fee\s*\+|update\s+public\.orders/iu);
+});
+
+test("tarifas finais alteram somente Aparecida e Liberdade e preservam as outras 50", () => {
+  const previous = new Map(parseFeeUpdates(increasedFeesMigration)
+    .map(({ slug, fee }) => [slug, fee]));
+  const updates = [...targetedFeesMigration.matchAll(
+    /update public\.delivery_zones set fee = (\d+\.\d{2}) where slug = '([^']+)';/g
+  )].map(([, fee, slug]) => [slug, Number(fee)]);
+  assert.deepEqual(updates, [["aparecida", 9], ["liberdade", 9]]);
+  const final = new Map([...previous, ...updates]);
+  assert.equal(final.size, 52);
+  assert.equal([...final].filter(([slug, fee]) => fee === previous.get(slug)).length, 50);
+  assert.equal([...final.values()].filter(fee => fee < 0).length, 0);
+  for (const zone of parseZoneRows(migration)) {
+    assert.equal(final.get(zone.slug), expectedFees.get(zone.name), zone.name);
+  }
+  assert.equal((targetedFeesMigration.match(/\bupdate\b/gi) || []).length, 2);
+  assert.doesNotMatch(targetedFeesMigration, /public\.orders|delivery_actual_fee|\b(?:insert|delete|alter|drop|truncate)\b/iu);
+  assert.match(targetedFeesMigration, /v_total_updated <> 2/);
+  assert.match(targetedFeesMigration, /and active = true and fee = 7\.20/);
+  assert.match(targetedFeesMigration, /begin;[\s\S]*raise exception[\s\S]*commit;/);
 });
 
 test("origens administrativas seguem a classificação solicitada", () => {
