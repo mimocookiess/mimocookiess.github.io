@@ -15,14 +15,17 @@ const fixture = (overrides = {}) => ({
 
 function canvasFactory() {
   const calls = [];
+  const images = [];
+  const rectangles = [];
   const context = {
     font: "", measureText(value) { return { width: Array.from(value).length * parseInt(this.font.match(/(\d+)px/)[1]) * 0.55 }; },
-    fillText(value, x, y) { calls.push({ value, x, y, font: this.font }); },
-    fillRect() {}, drawImage() {},
-    getImageData() { return { data: new Uint8ClampedArray([80, 40, 20, 255, 255, 240, 245, 255]) }; },
-    putImageData(pixels) { assert.deepEqual([...pixels.data], [0, 0, 0, 255, 255, 255, 255, 255]); }
+    fillText(value, x, y) { calls.push({ value, x, y, font: this.font, align: this.textAlign }); },
+    fillRect(x, y, width, height) { rectangles.push({ x, y, width, height }); },
+    drawImage(image, x, y) { images.push({ image, x, y }); },
+    getImageData() { return { data: new Uint8ClampedArray([110, 0, 25, 255, 255, 225, 228, 255, 255, 128, 164, 255]) }; },
+    putImageData(pixels) { assert.deepEqual([...pixels.data], [0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255]); }
   };
-  return { width: 0, height: 0, calls, getContext: () => context,
+  return { width: 0, height: 0, calls, images, rectangles, getContext: () => context,
     toBlob(callback, type) { callback(new Blob(["synthetic PNG"], { type })); } };
 }
 function render(order, logo = null) {
@@ -154,13 +157,25 @@ test("muitos itens e textos longos aumentam altura sem perder conteúdo nem ultr
   const noteText = long.calls.slice(noteIndex + 1, -1).map(call => call.value).join("");
   assert.equal(noteText.replace(/\s/g, ""), notes.replace(/\s/g, ""));
   for (const call of long.calls) {
-    assert.ok(call.y + parseInt(call.font.match(/(\d+)px/)[1]) <= long.height - 16);
-    assert.ok(call.value.length * parseInt(call.font.match(/(\d+)px/)[1]) * 0.55 <= 353);
+    assert.ok(call.y + parseInt(call.font.match(/(\d+)px/)[1]) <= long.height - 22);
+    const width = call.value.length * parseInt(call.font.match(/(\d+)px/)[1]) * 0.55;
+    const left = call.align === "right" ? call.x - width : call.align === "center" ? call.x - width / 2 : call.x;
+    assert.ok(left >= 22);
+    assert.ok(left + width <= 362);
   }
 });
 
-test("logo carregada é convertida para preto e branco e preserva proporção", () => {
-  assert.equal(render(fixture(), { naturalWidth: 150, naturalHeight: 150 }).height - render(fixture()).height, 180);
+test("logo enviada é monocromática, proporcional e centralizada somente no topo", () => {
+  const canvas = render(fixture(), { naturalWidth: 1255, naturalHeight: 820 });
+  assert.equal(canvas.height - render(fixture()).height, 170);
+  assert.equal(canvas.images.length, 1);
+  const logo = canvas.images[0];
+  assert.equal(logo.image.width, 260);
+  assert.equal(logo.image.height, 170);
+  assert.equal(logo.x, 62);
+  assert.equal(logo.y, 22);
+  assert.ok(logo.y + logo.image.height < canvas.calls[0].y);
+  assert.equal(canvas.calls.at(-1).value, "Obrigada por pedir Mimo!");
 });
 
 test("PNG usa order_number no nome e não UUID; falha de conversão é detectada", async () => {
@@ -168,6 +183,61 @@ test("PNG usa order_number no nome e não UUID; falha de conversão é detectada
   assert.equal(file.name, "mimo-pedido-271.png");
   assert.equal(file.type, "image/png");
   await assert.rejects(receipt.canvasToPngFile({ toBlob: callback => callback(null) }, 271));
+});
+
+test("margens de 22 px protegem preços, subtotal, entrega e total dentro de 340 px", () => {
+  for (const total of [46, 123456789.99]) {
+    const canvas = render(fixture({ delivery_method: "Entrega", delivery_fee: 7, total }));
+    assert.equal(canvas.width, 384);
+    const amounts = canvas.calls.filter(call => call.align === "right");
+    assert.ok(amounts.length >= 4);
+    for (const call of amounts) {
+      const width = call.value.length * parseInt(call.font.match(/(\d+)px/)[1]) * 0.55;
+      assert.equal(call.x, 362);
+      assert.ok(call.x - width >= 22);
+    }
+    const separators = canvas.rectangles.filter(rect => rect.height === 2);
+    assert.ok(separators.length > 0);
+    for (const rect of separators) {
+      assert.equal(rect.x, 22);
+      assert.equal(rect.width, 340);
+    }
+  }
+});
+
+test("emojis são removidos apenas da impressão, preservando acentos, números e pedido original", () => {
+  const order = fixture({
+    customer_name: "Cliente fictício 🍪",
+    payment_method: "PIX ✅",
+    delivery_method: "Entrega",
+    customer_address: "Rua fictícia, 123 🏠",
+    notes: "Observação ❤️ 👩🏽‍🍳 🇧🇷 1️⃣ às 18:00 ©️",
+    order_items: [{ quantity: 2, product_name: "Cookie 🍪", line_total: 39 }]
+  });
+  const before = JSON.stringify(order);
+  const text = render(order).calls.map(call => call.value).join("\n");
+  assert.doesNotMatch(text, /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/u);
+  for (const value of ["Cliente fictício", "Rua fictícia, 123", "2x Cookie", "Observação", "às 18:00", "Obrigada por pedir Mimo!"]) assert.ok(text.includes(value));
+  assert.equal(JSON.stringify(order), before);
+});
+
+test("asset é uma cópia exata da imagem enviada e o carregamento usa somente essa logo", async () => {
+  const asset = fs.readFileSync(require.resolve("../assets/images/receipt-logo.jpg"));
+  assert.equal(require("node:crypto").createHash("sha256").update(asset).digest("hex"),
+    "2297af82e4855fcb397fad8b59a1afe9c60e76b8ab95727941b2af0248f51dac");
+  const paths = [];
+  const context = { module: { exports: {} }, setTimeout, clearTimeout,
+    Image: class {
+      naturalWidth = 1255;
+      naturalHeight = 820;
+      set src(value) { paths.push(value); this.onload(); }
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve("../admin/order-receipt.js"), "utf8"), context);
+  const logo = await context.module.exports.loadReceiptLogo();
+  assert.equal(await context.module.exports.loadReceiptLogo(), logo);
+  assert.equal(logo.naturalWidth, 1255);
+  assert.deepEqual(paths, ["../assets/images/receipt-logo.jpg"]);
 });
 
 test("share compatível envia o File PNG", async () => {
@@ -201,7 +271,7 @@ test("carregamento malsucedido da logo é tolerado, sem dados pessoais no warnin
   const warnings = [];
   const context = { module: { exports: {} }, setTimeout, clearTimeout,
     console: { warn: message => warnings.push(message) },
-    Image: class { set src(value) { assert.equal(value, "../assets/images/logo.png"); this.onerror(); } } };
+    Image: class { set src(value) { assert.equal(value, "../assets/images/receipt-logo.jpg"); this.onerror(); } } };
   vm.runInNewContext(fs.readFileSync(require.resolve("../admin/order-receipt.js"), "utf8"), context);
   assert.equal(await context.module.exports.loadReceiptLogo(), null);
   assert.deepEqual(warnings, ["Logo da comanda indisponível."]);

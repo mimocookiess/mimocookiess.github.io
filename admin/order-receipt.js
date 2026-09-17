@@ -2,7 +2,8 @@
   "use strict";
 
   const WIDTH = 384;
-  const MARGIN = 16;
+  // Keep a 340 px content area inside the 384 px bitmap for thermal printing.
+  const MARGIN = 22;
   const CONTENT_WIDTH = WIDTH - MARGIN * 2;
   let logoPromise;
 
@@ -45,7 +46,7 @@
         const timeout = setTimeout(() => finish(null), 5000);
         img.onload = () => finish(img.naturalWidth ? img : null);
         img.onerror = () => finish(null);
-        img.src = "../assets/images/logo.png";
+        img.src = "../assets/images/receipt-logo.jpg";
       });
     }
     return logoPromise;
@@ -88,7 +89,9 @@
     const font = (size, bold) => `${bold ? 700 : 500} ${size}px Arial, sans-serif`;
     function text(value, size = 22, bold = false, align = "left", width = CONTENT_WIDTH, x = MARGIN) {
       context.font = font(size, bold);
-      const lines = wrapText(context, value, width);
+      // Filter only the printed text; keep the original order data untouched.
+      const printable = String(value).replace(/[#*0-9]\uFE0F?\u20E3|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0E\uFE0F\u{E0020}-\u{E007F}]/gu, "");
+      const lines = wrapText(context, printable, width);
       for (const line of lines) {
         const lineY = y;
         commands.push(() => {
@@ -122,7 +125,7 @@
       y = Math.max(y, end);
     }
     if (logo) {
-      const logoWidth = 180;
+      const logoWidth = 260;
       const logoHeight = Math.round(logoWidth * logo.naturalHeight / logo.naturalWidth);
       const logoY = y;
       commands.push(() => {
