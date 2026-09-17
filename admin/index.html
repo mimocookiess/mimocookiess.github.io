@@ -22,7 +22,7 @@
   <link rel="icon" type="image/png" sizes="512x512" href="../assets/icons/favicon-512x512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="admin.css?v=10">
+  <link rel="stylesheet" href="admin.css?v=11">
 </head>
 
 <body>
@@ -711,11 +711,24 @@
 
   </main>
 
+  <dialog id="receipt-preview" class="receipt-preview" aria-labelledby="receipt-preview-title">
+    <h2 id="receipt-preview-title">Comanda pronta</h2>
+    <p data-receipt-status role="status"></p>
+    <div class="receipt-preview-actions">
+      <button type="button" data-receipt-share>Compartilhar</button>
+      <a data-receipt-open target="_blank" rel="noopener">Abrir imagem</a>
+      <a data-receipt-save>Salvar PNG</a>
+      <button type="button" class="secondary-button" data-receipt-close autofocus>Fechar</button>
+    </div>
+    <img alt="Comanda do pedido selecionado">
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../supabase-config.js?v=1"></script>
   <script src="../store-status.js?v=2"></script>
   <script src="image-optimizer.js?v=1"></script>
   <script src="reports.js?v=1"></script>
-  <script src="admin.js?v=19"></script>
+  <script src="order-receipt.js?v=1"></script>
+  <script src="admin.js?v=20"></script>
 </body>
 </html>

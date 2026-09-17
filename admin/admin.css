@@ -1556,13 +1556,61 @@ button:disabled {
 
 .order-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
 }
 
+.order-actions[hidden] {
+  display: none;
+}
+
 .order-actions .confirm-order-button {
   background: #28723f;
+}
+
+.order-actions .print-order-button {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+}
+
+.receipt-preview {
+  width: min(480px, calc(100% - 24px));
+  max-height: 90vh;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+}
+
+.receipt-preview::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.receipt-preview img {
+  display: block;
+  width: 384px;
+  max-width: 100%;
+  height: auto;
+  margin: 16px auto 0;
+}
+
+.receipt-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.receipt-preview-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text);
 }
 
 .order-cancellation-reason {

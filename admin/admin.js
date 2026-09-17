@@ -141,6 +141,10 @@ let orderAlertAudioContext = null;
 let orderAlertsEnabled = loadOrderAlertsPreference();
 const alertedOrderIds = new Set();
 const updatingOrderIds = new Set();
+const printingOrderIds = new Set();
+// Start loading the same-origin logo before the first print gesture.
+const receiptLogo = MimoOrderReceipt.loadReceiptLogo();
+let clearReceiptPreview = () => {};
 const actualDeliveryFeeSavingIds = new Set();
 const actualDeliveryFeeFeedback = new Map();
 
@@ -1499,10 +1503,14 @@ function renderOrders() {
           ${itemsHtml}
         </div>
 
-        ${
-          canConfirm || canComplete || canCancel
-            ? `
               <div class="order-actions" data-order-actions>
+                <button
+                  class="print-order-button"
+                  type="button"
+                  data-print-order="${orderId}"
+                  aria-busy="${printingOrderIds.has(order.id)}"
+                  ${printingOrderIds.has(order.id) ? "disabled" : ""}
+                >${printingOrderIds.has(order.id) ? "Preparando..." : "Imprimir"}</button>
                 ${
                   canConfirm
                     ? `
@@ -1584,9 +1592,6 @@ function renderOrders() {
                   `
                   : ""
               }
-            `
-            : ""
-        }
       </article>
     `;
   }).join("");
@@ -1912,6 +1917,12 @@ ordersList.addEventListener("submit", async event => {
 });
 
 ordersList.addEventListener("click", async event => {
+  const printButton = event.target.closest("[data-print-order]");
+  if (printButton) {
+    await printOrder(printButton.closest("[data-order-id]").dataset.orderId);
+    return;
+  }
+
   const completeButton =
     event.target.closest("[data-complete-order]");
 
@@ -1968,6 +1979,89 @@ ordersList.addEventListener("change", event => {
   );
 });
 
+function setOrderPrinting(orderId, printing) {
+  if (printing) printingOrderIds.add(orderId);
+  else printingOrderIds.delete(orderId);
+  const button = ordersList.querySelector(`[data-print-order="${CSS.escape(orderId)}"]`);
+  if (!button) return;
+  button.disabled = printing;
+  button.setAttribute("aria-busy", String(printing));
+  button.textContent = printing ? "Preparando..." : "Imprimir";
+}
+
+function showReceiptPreview(file, message) {
+  const dialog = document.querySelector("#receipt-preview");
+  clearReceiptPreview();
+  if (dialog.open) dialog.close();
+  const url = URL.createObjectURL(file);
+  const preview = dialog.querySelector("img");
+  const openLink = dialog.querySelector("[data-receipt-open]");
+  const saveLink = dialog.querySelector("[data-receipt-save]");
+  const shareButton = dialog.querySelector("[data-receipt-share]");
+  const status = dialog.querySelector("[data-receipt-status]");
+  preview.src = openLink.href = saveLink.href = url;
+  saveLink.download = file.name;
+  status.textContent = message;
+  shareButton.hidden = !MimoOrderReceipt.canShareReceipt(file);
+  shareButton.disabled = false;
+  shareButton.onclick = async () => {
+    shareButton.disabled = true;
+    try {
+      // The file is already ready: share runs directly within this new gesture.
+      const result = await MimoOrderReceipt.shareOrderReceipt(file);
+      status.textContent = result === "shared" ? "Comanda compartilhada."
+        : result === "cancelled" ? "Compartilhamento cancelado. Você pode tentar novamente."
+        : "Abra ou salve a imagem para usar no aplicativo da impressora.";
+    } catch {
+      status.textContent = "Não foi possível compartilhar. Tente novamente ou salve a imagem.";
+    } finally {
+      shareButton.disabled = false;
+    }
+  };
+  dialog.querySelector("[data-receipt-close]").onclick = () => dialog.close();
+  const onClose = () => {
+    if (!dialog.open) clearReceiptPreview();
+  };
+  clearReceiptPreview = () => {
+    dialog.removeEventListener("close", onClose);
+    URL.revokeObjectURL(url);
+    preview.removeAttribute("src");
+    openLink.removeAttribute("href");
+    saveLink.removeAttribute("href");
+    shareButton.onclick = null;
+    clearReceiptPreview = () => {};
+  };
+  dialog.addEventListener("close", onClose);
+  dialog.showModal();
+}
+
+async function printOrder(orderId) {
+  if (printingOrderIds.has(orderId)) return;
+  const order = orders.find(candidate => candidate.id === orderId);
+  if (!order) return;
+  setOrderPrinting(orderId, true);
+  let file;
+  try {
+    const data = MimoOrderReceipt.buildOrderReceiptData(order);
+    const canvas = MimoOrderReceipt.renderOrderReceiptCanvas(data, {
+      logo: await receiptLogo,
+      money: BRL
+    });
+    file = await MimoOrderReceipt.canvasToPngFile(canvas, data.orderNumber);
+    const result = await MimoOrderReceipt.shareOrderReceipt(file);
+    if (result === "fallback" || result === "retry") {
+      showReceiptPreview(file, result === "retry"
+        ? "Comanda pronta. Toque em Compartilhar para escolher o aplicativo da impressora."
+        : "Abra ou salve a imagem para usar no aplicativo da impressora. No celular, você também pode manter a imagem pressionada para salvá-la.");
+    }
+  } catch {
+    if (file) showReceiptPreview(file, "Não foi possível compartilhar. Tente novamente ou salve a imagem.");
+    else setMessage(ordersMessage, "Não foi possível preparar a comanda. Tente novamente.", "error");
+  } finally {
+    setOrderPrinting(orderId, false);
+  }
+}
+
 function showCancellationForm(orderId) {
   const orderCard = ordersList.querySelector(
     `[data-order-id="${CSS.escape(orderId)}"]`
@@ -2004,7 +2098,7 @@ function setOrderUpdating(orderId, updating) {
 
   if (!orderCard) return;
 
-  orderCard.querySelectorAll("button, select").forEach(control => {
+  orderCard.querySelectorAll("button:not([data-print-order]), select").forEach(control => {
     control.disabled = updating;
   });
 
