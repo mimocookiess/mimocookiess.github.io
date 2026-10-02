@@ -130,6 +130,32 @@ a { color: inherit; }
     radial-gradient(circle at 100% 16%, rgba(232, 189, 208, .55), transparent 28%),
     linear-gradient(180deg, #fff8fb, #fff2f7);
 }
+/* Decoracao sazonal fora do fluxo; conteudo e controles mantem suas dimensoes. */
+.halloween-hero {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.halloween-hero img { position: absolute; height: auto; }
+.halloween-hero-ghost {
+  top: 80px;
+  left: min(-70px, calc(50% - 835px));
+  width: 330px;
+  opacity: .38;
+}
+.halloween-hero-pumpkins {
+  top: 45px;
+  right: -28px;
+  width: 260px;
+  opacity: .4;
+}
+.halloween-hero-web { top: -5px; width: 130px; opacity: .45; }
+.halloween-hero-web-left { left: -5px; }
+.halloween-hero-web-right { right: -5px; transform: scaleX(-1); }
+.halloween-hero-bats { top: 6px; left: 40%; width: 240px; opacity: .55; }
+.hero > .nav,
+.hero > .hero-content { position: relative; }
 .nav {
   min-height: 94px;
   display: flex;
@@ -507,6 +533,31 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
   transition: none;
 }
 .cart-header { display: flex; align-items: center; justify-content: space-between; }
+.cart-header,
+.totals { position: relative; isolation: isolate; }
+.cart-header::before,
+.totals::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  background: center / contain no-repeat;
+  opacity: .22;
+}
+.cart-header::before {
+  top: -58px;
+  right: 46px;
+  width: clamp(94px, 26vw, 135px);
+  aspect-ratio: 269 / 280;
+  background-image: url("assets/images/halloween-cart-ghost.webp");
+  opacity: .25;
+  transform: rotate(180deg);
+}
+.totals::before {
+  inset: 0;
+  background-image: url("assets/images/halloween-pumpkin.webp");
+  background-size: auto 84%;
+}
 .icon-button {
   width: 42px;
   height: 42px;
@@ -845,6 +896,9 @@ footer a { font-weight: 700; }
 }
 
 @media (max-width: 960px) {
+  .halloween-hero-ghost { top: 100px; left: -45px; width: 270px; opacity: .3; }
+  .halloween-hero-pumpkins { top: 75px; right: -40px; width: 225px; opacity: .3; }
+  .halloween-hero-bats { left: 36%; width: 200px; }
   .store-pause-card {
     position: fixed;
     top: auto;
@@ -929,6 +983,11 @@ footer a { font-weight: 700; }
 }
 
 @media (max-width: 620px) {
+  .cart-header::before { top: -44px; }
+  .halloween-hero-ghost { top: 82px; left: -62px; width: 190px; opacity: .28; }
+  .halloween-hero-pumpkins { top: 66px; right: -60px; width: 180px; opacity: .28; }
+  .halloween-hero-web { width: 85px; }
+  .halloween-hero-bats { top: 12px; left: 28%; width: 150px; opacity: .4; }
   .shell { width: min(100% - 22px, 1160px); }
   .store-pause-card {
     width: calc(100% - 22px);
