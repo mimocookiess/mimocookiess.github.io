@@ -278,6 +278,31 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 }
 
 .section { padding: 98px 0; }
+/* O gato acompanha o bloco sazonal do hero; apenas a decoracao recebe recorte. */
+#cardapio { position: relative; }
+.halloween-menu-cat {
+  display: none;
+  position: absolute;
+  top: -32px;
+  right: 0;
+  width: 100%;
+  height: 240px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+:root:has(.halloween-hero:not([hidden])) .halloween-menu-cat { display: block; }
+.halloween-menu-cat svg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 260px;
+  height: auto;
+  opacity: .20;
+  transform: translateX(30%);
+}
+#cardapio > .section-heading,
+#cardapio > .product-grid { position: relative; }
 .section-heading {
   display: flex;
   justify-content: space-between;
@@ -1044,6 +1069,8 @@ footer a { font-weight: 700; }
   .top-card { top: 0; left: 10px; }
   .bottom-card { left: 0; bottom: 0; }
   .section { padding: 74px 0; }
+  .halloween-menu-cat { right: -11px; }
+  .halloween-menu-cat svg { width: clamp(150px, 40vw, 190px); }
   .section-heading { display: block; }
   .section-heading > p { margin-top: 14px; text-align: left; }
   .product-grid { grid-template-columns: 1fr; }
