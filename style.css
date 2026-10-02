@@ -481,6 +481,17 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 .cart-fab strong { white-space: nowrap; }
 .cart-fab span { font-weight: 700; }
 .cart-fab strong { font-size: 14px; }
+.cart-fab-stem {
+  position: absolute;
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+  left: 50%;
+  top: -16px;
+  width: 20px;
+  height: 18px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 .cart-fab-face {
   width: min(62px, 100%);
   height: auto;
@@ -494,7 +505,8 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
     column-gap: 2px;
     padding-inline: 12px;
   }
-  .cart-fab-face { display: none; }
+  .cart-fab-face,
+  .cart-fab-stem { display: none; }
   #cart-fab-summary { grid-column: 3; }
 }
 
