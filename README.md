@@ -2,6 +2,8 @@
 
 Site estático, responsivo e pronto para GitHub Pages.
 
+Expediente automático e controles manuais: veja [comportamento, testes e ordem de implantação](docs/store-schedule.md).
+
 ## Antes de publicar
 
 Abra `config.js` e preencha o número do WhatsApp e a site key pública do Cloudflare Turnstile:

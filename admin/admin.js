@@ -42,11 +42,9 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 const {
   STORE_MODES,
   buildStoreSettingsUpdate,
-  getStoreState: resolveStoreState,
   getNextRegularOpening,
-  normalizeStoreMode,
+  getStoreState: resolveStoreState,
   storeLocalDateTimeToDate,
-  toValidDate,
   toStoreLocalDateTimeInput
 } = MimoStoreStatus;
 
@@ -128,7 +126,6 @@ let selectedOrderStatuses = loadOrderStatusFilters();
 let productImagePreviewUrl = "";
 let isSavingProduct = false;
 let isSavingSettings = false;
-let settingsExpirationTimer = null;
 let isAdminAuthenticated = false;
 let ordersLoadPromise = null;
 let fullOrdersRefreshQueued = false;
@@ -444,64 +441,60 @@ async function startAdminSession(user) {
   await Promise.all([
     loadProducts(),
     loadOrders(),
-    loadStoreSettings()
+    syncAdminStoreStatus()
   ]);
 
   startAdminOrderSync();
 }
 
-function isNextRegularOpening(value, now = new Date()) {
-  if (!value) return false;
+let settingsData = null;
+let settingsDirty = false;
+let settingsRevision = 0;
+const storeAutomatic = document.querySelector("#store-automatic");
+const storeManualOpen = document.querySelector("#store-manual-open");
 
-  const returnDate = storeLocalDateTimeToDate(value);
-  const nextOpening = getNextRegularOpening(now);
-
-  if (!returnDate || !nextOpening) return false;
-
-  return returnDate.getTime() === nextOpening.getTime();
-}
-
-function getSettingsState(data, now = new Date()) {
-  return resolveStoreState({
-    isPaused: data.is_paused === true,
-    mode: normalizeStoreMode(data.store_mode, data.is_paused === true),
-    returnTime: data.return_time
-  }, now);
-}
-
-function renderSettingsStatus(settingsState) {
-  settingsStatus.textContent = settingsState === STORE_MODES.CLOSED_TODAY
-    ? "Loja fechada"
-    : settingsState === STORE_MODES.PAUSED
-      ? "Loja em pausa"
-      : "Loja funcionando";
-  settingsStatus.classList.toggle("paused", settingsState !== "open");
-}
-
-function syncStoreSettingsForm(data) {
-  const settingsState = getSettingsState(data);
-
-  if (settingsExpirationTimer !== null) {
-    window.clearTimeout(settingsExpirationTimer);
-    settingsExpirationTimer = null;
+function renderSettingsStatus() {
+  if (!settingsData) {
+    settingsStatus.textContent = "Status indisponível";
+    return;
   }
+  const now = new Date();
+  const settings = {
+    isPaused: settingsData.is_paused === true,
+    mode: settingsData.store_mode,
+    returnTime: settingsData.return_time,
+    manualOpenUntil: settingsData.manual_open_until
+  };
+  const state = resolveStoreState(settings, now);
+  const exceptional = new Date(settingsData.manual_open_until) > now;
+  const manual = settingsData.is_paused &&
+    (!settingsData.return_time || new Date(settingsData.return_time) > now);
+  const label = state === STORE_MODES.OPEN ? "Loja aberta" :
+    state === STORE_MODES.PAUSED ? "Loja em pausa" : "Loja fechada";
+  const formatUntil = value => toStoreLocalDateTimeInput(value).replace("T", " ") + " (Santarém)";
+  let detail = "expediente automático";
+  if (exceptional) detail = `abertura excepcional até ${formatUntil(settingsData.manual_open_until)}`;
+  else if (manual) detail = settingsData.return_time
+    ? `retorno ${formatUntil(settingsData.return_time)}`
+    : "controle manual, sem retorno definido";
+  settingsStatus.textContent = `${label} — ${detail}`;
+  settingsStatus.classList.toggle("paused", state !== STORE_MODES.OPEN);
+}
 
-  storeIsPaused.checked = settingsState === STORE_MODES.PAUSED;
-  storeClosedToday.checked = settingsState === STORE_MODES.CLOSED_TODAY;
-  storeReturnTime.value = toStoreLocalDateTimeInput(data.return_time);
+function syncStoreSettingsForm(data, force = false) {
+  settingsData = data;
+  renderSettingsStatus();
+  if (settingsDirty && !force) return;
+  const now = new Date();
+  const manualOpen = new Date(data.manual_open_until) > now;
+  const manualStop = data.is_paused && (!data.return_time || new Date(data.return_time) > now);
+  storeManualOpen.checked = manualOpen;
+  storeIsPaused.checked = manualStop && data.store_mode !== STORE_MODES.CLOSED_TODAY;
+  storeClosedToday.checked = manualStop && data.store_mode === STORE_MODES.CLOSED_TODAY;
+  storeAutomatic.checked = !manualOpen && !manualStop;
+  storeReturnTime.value = manualStop ? toStoreLocalDateTimeInput(data.return_time) : "";
   storePauseMessage.value = data.pause_message || "";
-  renderSettingsStatus(settingsState);
-
-  const returnDate = toValidDate(data.return_time);
-  const delay = returnDate
-    ? returnDate.getTime() - Date.now()
-    : 0;
-
-  if (settingsState !== STORE_MODES.OPEN && delay > 0) {
-    settingsExpirationTimer = window.setTimeout(() => {
-      loadStoreSettings();
-    }, Math.min(delay + 50, 2_147_483_647));
-  }
+  settingsDirty = false;
 }
 
 function loadOrderAlertsPreference() {
@@ -649,6 +642,7 @@ function setSettingsSaving(saving) {
 }
 
 async function saveStoreSettings(values, successMessage) {
+  settingsRevision += 1;
   setSettingsSaving(true);
   setMessage(settingsMessage, "Salvando...", "loading");
 
@@ -657,12 +651,12 @@ async function saveStoreSettings(values, successMessage) {
       .from("store_settings")
       .update(values)
       .eq("id", 1)
-      .select("is_paused, store_mode, return_time, pause_message")
+      .select("is_paused, store_mode, return_time, pause_message, manual_open_until")
       .single();
 
     if (error) throw error;
 
-    syncStoreSettingsForm(data);
+    syncStoreSettingsForm(data, true);
     setMessage(settingsMessage, successMessage, "success");
 
     return true;
@@ -681,34 +675,23 @@ async function saveStoreSettings(values, successMessage) {
 }
 
 async function loadStoreSettings() {
+  if (isSavingSettings) return;
+  const revision = settingsRevision;
   setMessage(settingsMessage);
 
   try {
     const { data, error } = await supabaseClient
       .from("store_settings")
-      .select("is_paused, store_mode, return_time, pause_message")
+      .select("is_paused, store_mode, return_time, pause_message, manual_open_until")
       .eq("id", 1)
       .maybeSingle();
+
+    if (revision !== settingsRevision) return;
 
     if (error) throw error;
 
     if (!data) {
       throw new Error("A configuração da loja ainda não foi criada.");
-    }
-
-    if (
-      data.is_paused === true &&
-      getSettingsState(data) === STORE_MODES.OPEN
-    ) {
-      await saveStoreSettings(
-        buildStoreSettingsUpdate(
-          STORE_MODES.OPEN,
-          null,
-          data.pause_message
-        ),
-        "Loja reaberta automaticamente."
-      );
-      return;
     }
 
     syncStoreSettingsForm(data);
@@ -793,6 +776,9 @@ loginForm.addEventListener("submit", async event => {
 
 logoutButton.addEventListener("click", async () => {
   isAdminAuthenticated = false;
+  settingsRevision += 1;
+  settingsDirty = false;
+  settingsData = null;
   stopAdminOrderSync();
   MimoAdminReports.reset();
   await supabaseClient.auth.signOut();
@@ -832,7 +818,7 @@ settingsForm.addEventListener("submit", async event => {
     ? STORE_MODES.CLOSED_TODAY
     : storeIsPaused.checked
       ? STORE_MODES.PAUSED
-      : STORE_MODES.OPEN;
+      : storeManualOpen.checked ? STORE_MODES.MANUAL_OPEN : STORE_MODES.AUTOMATIC;
   const values = buildStoreSettingsUpdate(
     selectedMode,
     returnTime,
@@ -845,78 +831,49 @@ settingsForm.addEventListener("submit", async event => {
   );
 });
 
-storeIsPaused.addEventListener("change", () => {
-  if (!storeIsPaused.checked) return;
+settingsForm.addEventListener("input", () => { settingsDirty = true; });
 
-  storeClosedToday.checked = false;
-
-  if (isNextRegularOpening(storeReturnTime.value)) {
-    storeReturnTime.value = "";
-  }
-});
-
-storeClosedToday.addEventListener("change", async () => {
+// Selecionar fechamento não grava; salvar aplica a ação e o retorno juntos.
+document.querySelector("#close-today-button").addEventListener("click", async () => {
   if (isSavingSettings) return;
-
-  if (!storeClosedToday.checked) {
-    setMessage(
-      settingsMessage,
-      "Atalho desmarcado. Para reabrir a loja, ajuste a pausa e salve o funcionamento."
-    );
-    return;
-  }
-
-  const previousIsPaused = storeIsPaused.checked;
-  const previousReturnTime = storeReturnTime.value;
-
-  storeIsPaused.checked = false;
-  setMessage(settingsMessage);
-
-  const nextRegularOpening = getNextRegularOpening();
-  const values = buildStoreSettingsUpdate(
+  const nextOpening = getNextRegularOpening(new Date(), true);
+  await saveStoreSettings(buildStoreSettingsUpdate(
     STORE_MODES.CLOSED_TODAY,
-    nextRegularOpening?.toISOString(),
+    nextOpening?.toISOString() || null,
     storePauseMessage.value
-  );
-
-  const saved = await saveStoreSettings(
-    values,
-    "Loja fechada por hoje. Retorno definido para o próximo dia de funcionamento às 11h."
-  );
-
-  if (!saved) {
-    storeClosedToday.checked = false;
-    storeIsPaused.checked = previousIsPaused;
-    storeReturnTime.value = previousReturnTime;
-  }
+  ), "Loja fechada até a próxima abertura regular após hoje.");
 });
 
 clearReturnTimeButton.addEventListener("click", async () => {
   if (isSavingSettings) return;
 
-  const previousIsPaused = storeIsPaused.checked;
-  const previousIsClosedToday = storeClosedToday.checked;
   const previousReturnTime = storeReturnTime.value;
-  const shouldRemainPaused = previousIsPaused || previousIsClosedToday;
+  const selectedMode = storeClosedToday.checked
+    ? STORE_MODES.PAUSED
+    : storeIsPaused.checked
+      ? STORE_MODES.PAUSED
+      : storeManualOpen.checked
+        ? STORE_MODES.MANUAL_OPEN
+        : STORE_MODES.AUTOMATIC;
 
   storeReturnTime.value = "";
-  storeClosedToday.checked = false;
-  storeIsPaused.checked = shouldRemainPaused;
-
   const saved = await saveStoreSettings(
-    buildStoreSettingsUpdate(
-      shouldRemainPaused ? STORE_MODES.PAUSED : STORE_MODES.OPEN,
-      null,
-      storePauseMessage.value
-    ),
+    buildStoreSettingsUpdate(selectedMode, null, storePauseMessage.value),
     "Horário de retorno removido."
   );
 
-  if (!saved) {
-    storeIsPaused.checked = previousIsPaused;
-    storeClosedToday.checked = previousIsClosedToday;
-    storeReturnTime.value = previousReturnTime;
-  }
+  if (!saved) storeReturnTime.value = previousReturnTime;
+});
+
+const syncAdminStoreStatus = MimoStoreStatus.watchStoreStatus({
+  window, document, refresh: loadStoreSettings, render: renderSettingsStatus,
+  getSettings: () => settingsData ? {
+    isPaused: settingsData.is_paused === true,
+    mode: settingsData.store_mode,
+    returnTime: settingsData.return_time,
+    manualOpenUntil: settingsData.manual_open_until
+  } : {},
+  active: () => isAdminAuthenticated && !isSavingSettings
 });
 
 productName.addEventListener("input", () => {

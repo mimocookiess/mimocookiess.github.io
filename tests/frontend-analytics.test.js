@@ -173,7 +173,13 @@ async function createHarness({ invoke, productsData = [] } = {}) {
   const settingsQuery = {
     select() { return this; },
     eq() { return this; },
-    async maybeSingle() { return { data: null, error: null }; }
+    async maybeSingle() { return { data: {
+      is_paused: false,
+      store_mode: "open",
+      return_time: null,
+      pause_message: null,
+      manual_open_until: "2099-09-05T03:00:00.000Z"
+    }, error: null }; }
   };
   const context = vm.createContext({
     AbortController,
@@ -232,6 +238,7 @@ async function createHarness({ invoke, productsData = [] } = {}) {
     }
   });
   const window = {
+    addEventListener() {},
     MimoAnalytics: {
       getIdentifiers: async () => ({
         client_id: "123.456",
@@ -508,7 +515,8 @@ test("card de status preserva OPEN, PAUSED e CLOSED_TODAY e permite dispensa vis
       isPaused: false,
       mode: MimoStoreStatus.STORE_MODES.OPEN,
       returnTime: null,
-      pauseMessage: ""
+      pauseMessage: "",
+      manualOpenUntil: "2099-09-05T03:00:00.000Z"
     };
     renderStoreSettings();
   `, context);
@@ -1031,4 +1039,21 @@ test("analytics indisponível envia nulls e não impede o pedido", async () => {
     session_id: null
   });
   assert.deepEqual(sequence, ["whatsapp"]);
+});
+
+test("fechar expediente bloqueia novos pedidos e preserva carrinho e formulário", async () => {
+  const { context, elements, invokeBodies } = await createHarness();
+  vm.runInContext('addItem("tradicional"); turnstileToken = "token";', context);
+  elements["customer-name"].value = "Cliente fictício";
+  elements["customer-notes"].value = "Observação fictícia";
+  const cartBefore = vm.runInContext('JSON.stringify([...cart])', context);
+  vm.runInContext('storeSettings = { isPaused: true, mode: "closed_today", returnTime: null, pauseMessage: "", manualOpenUntil: null }; renderStoreSettings();', context);
+  assert.equal(elements["whatsapp-button"].disabled, true);
+  await elements["checkout-form"].dispatch("submit");
+  assert.equal(invokeBodies.length, 0);
+  assert.equal(vm.runInContext('JSON.stringify([...cart])', context), cartBefore);
+  assert.equal(elements["customer-name"].value, "Cliente fictício");
+  assert.equal(elements["customer-notes"].value, "Observação fictícia");
+  vm.runInContext('storeSettings = { isPaused: false, mode: "open", returnTime: null, pauseMessage: "", manualOpenUntil: "2099-09-05T03:00:00.000Z" }; renderStoreSettings();', context);
+  assert.equal(elements["whatsapp-button"].disabled, false);
 });

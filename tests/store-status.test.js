@@ -1,158 +1,97 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const status = require("../store-status.js");
 
-const {
-  STORE_MODES,
-  buildStoreSettingsUpdate,
-  getStoreState,
-  getNextRegularOpening,
-  storeLocalDateTimeToDate,
-  toValidDate,
-  toStoreLocalDateTimeInput
-} = require("../store-status.js");
+const at = value => status.storeLocalDateTimeToDate(value);
+const automatic = { isPaused: false, mode: "open", manualOpenUntil: null };
 
-const returnAtEleven = "2026-08-06T14:00:00.000Z";
-
-test("pausa temporária continua pausa mesmo com retorno no dia seguinte", () => {
-  const state = getStoreState({
-    isPaused: true,
-    mode: STORE_MODES.PAUSED,
-    returnTime: returnAtEleven
-  }, new Date("2026-08-06T00:00:00.000Z"));
-
-  assert.equal(state, STORE_MODES.PAUSED);
+test("expediente abre às 11h e fecha às 19h de terça a domingo", () => {
+  for (const day of ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]) {
+    assert.equal(status.getStoreState(automatic, at(`${day}T10:59`)), "closed_today");
+    assert.equal(status.getStoreState(automatic, at(`${day}T11:00`)), "open");
+    assert.equal(status.getStoreState(automatic, at(`${day}T18:59`)), "open");
+    assert.equal(status.getStoreState(automatic, at(`${day}T19:00`)), "closed_today");
+  }
 });
 
-test("fechado por hoje permanece fechado durante a noite", () => {
-  const state = getStoreState({
-    isPaused: true,
-    mode: STORE_MODES.CLOSED_TODAY,
-    returnTime: returnAtEleven
-  }, new Date("2026-08-06T03:30:00.000Z"));
-
-  assert.equal(state, STORE_MODES.CLOSED_TODAY);
+test("segunda-feira permanece fechada e domingo retorna na terça", () => {
+  assert.equal(status.getStoreState(automatic, at("2026-09-07T12:00")), "closed_today");
+  assert.equal(
+    status.toStoreLocalDateTimeInput(status.getNextRegularOpening(at("2026-09-06T19:00"))),
+    "2026-09-08T11:00"
+  );
 });
 
-test("fechado por hoje permanece fechado às 7h50 da manhã seguinte", () => {
-  const state = getStoreState({
-    isPaused: true,
-    mode: STORE_MODES.CLOSED_TODAY,
-    returnTime: returnAtEleven
-  }, new Date("2026-08-06T10:50:00.000Z"));
-
-  assert.equal(state, STORE_MODES.CLOSED_TODAY);
-});
-
-test("fechado por hoje reabre automaticamente às 11h", () => {
+test("abertura excepcional vale fora do expediente até meia-noite", () => {
   const settings = {
-    isPaused: true,
-    mode: STORE_MODES.CLOSED_TODAY,
-    returnTime: returnAtEleven
+    ...automatic,
+    manualOpenUntil: at("2026-09-08T00:00").toISOString()
   };
-
+  assert.equal(status.getStoreState(settings, at("2026-09-07T12:00")), "open");
+  assert.equal(status.getStoreState(settings, at("2026-09-07T23:59")), "open");
+  assert.equal(status.getStoreState(settings, at("2026-09-08T00:00")), "closed_today");
   assert.equal(
-    getStoreState(settings, new Date("2026-08-06T13:59:59.999Z")),
-    STORE_MODES.CLOSED_TODAY
+    status.toStoreLocalDateTimeInput(status.getNextStoreMidnight(at("2026-09-07T12:00"))),
+    "2026-09-08T00:00"
   );
-  assert.equal(
-    getStoreState(settings, new Date(returnAtEleven)),
-    STORE_MODES.OPEN
-  );
+});
 
-  assert.deepEqual(
-    buildStoreSettingsUpdate(STORE_MODES.OPEN, returnAtEleven, "Mensagem"),
-    {
-      is_paused: false,
-      store_mode: STORE_MODES.OPEN,
-      return_time: null,
-      pause_message: "Mensagem"
+test("open legado segue o expediente e não vira exceção", () => {
+  assert.equal(status.normalizeStoreMode("open", false), "open");
+  assert.equal(status.getStoreState({ isPaused: false, mode: "open" }, at("2026-09-01T20:00")), "closed_today");
+});
+
+test("pausa e fechamento manual prevalecem até o retorno e depois voltam ao expediente", () => {
+  const returnTime = at("2026-09-01T20:00").toISOString();
+  assert.equal(status.getStoreState({isPaused:true,mode:"paused",returnTime}, at("2026-09-01T12:00")), "paused");
+  assert.equal(status.getStoreState({isPaused:true,mode:"paused",returnTime}, at("2026-09-01T20:00")), "closed_today");
+  assert.equal(status.getStoreState({isPaused:true,mode:"closed_today",returnTime}, at("2026-09-01T12:00")), "closed_today");
+  assert.equal(status.getStoreState({isPaused:true,mode:"closed_today",returnTime}, at("2026-09-02T12:00")), "open");
+});
+
+test("ações limpam estados conflitantes e persistem apenas a data da exceção", () => {
+  const now = at("2026-09-01T19:30");
+  assert.deepEqual(status.buildStoreSettingsUpdate("manual_open", null, " Mensagem ", now), {
+    is_paused: false,
+    store_mode: "open",
+    return_time: null,
+    pause_message: "Mensagem",
+    manual_open_until: at("2026-09-02T00:00").toISOString()
+  });
+  assert.equal(status.buildStoreSettingsUpdate("automatic", null, "", now).manual_open_until, null);
+  assert.equal(status.buildStoreSettingsUpdate("paused", null, "", now).manual_open_until, null);
+});
+
+test("datas da loja não dependem do fuso do dispositivo", () => {
+  const previous = process.env.TZ;
+  try {
+    for (const zone of ["Asia/Tokyo", "America/Los_Angeles", "UTC"]) {
+      process.env.TZ = zone;
+      assert.equal(at("2026-09-01T11:00").toISOString(), "2026-09-01T14:00:00.000Z");
+      assert.equal(status.getStoreState(automatic, at("2026-09-01T11:00")), "open");
     }
-  );
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
 });
 
-test("troca entre pausa e fechamento salva apenas a modalidade escolhida", () => {
-  const closed = buildStoreSettingsUpdate(
-    STORE_MODES.CLOSED_TODAY,
-    returnAtEleven,
-    "Mensagem"
-  );
-  const paused = buildStoreSettingsUpdate(
-    STORE_MODES.PAUSED,
-    "2026-08-05T23:00:00.000Z",
-    "Mensagem"
-  );
-
-  assert.equal(closed.store_mode, STORE_MODES.CLOSED_TODAY);
-  assert.equal(paused.store_mode, STORE_MODES.PAUSED);
-  assert.notEqual(closed.store_mode, paused.store_mode);
-});
-
-test("datetime-local é convertido no fuso America/Santarem", () => {
-  const date = storeLocalDateTimeToDate("2026-08-06T11:00");
-
-  assert.equal(date.toISOString(), returnAtEleven);
-  assert.equal(toStoreLocalDateTimeInput(date), "2026-08-06T11:00");
-});
-
-test("atalho calcula a próxima abertura regular às 11h", () => {
-  const cases = [
-    ["terça", "2026-09-01T18:30", "2026-09-02T11:00"],
-    ["quarta", "2026-09-02T18:30", "2026-09-03T11:00"],
-    ["quinta", "2026-09-03T18:30", "2026-09-04T11:00"],
-    ["sexta", "2026-09-04T18:30", "2026-09-05T11:00"],
-    ["sábado", "2026-09-05T18:30", "2026-09-06T11:00"],
-    ["domingo", "2026-09-06T18:30", "2026-09-08T11:00"],
-    ["segunda", "2026-09-07T18:30", "2026-09-08T11:00"]
-  ];
-
-  cases.forEach(([day, currentLocalTime, expectedReturn]) => {
-    const now = storeLocalDateTimeToDate(currentLocalTime);
-    const returnTime = getNextRegularOpening(now);
-
-    assert.equal(toStoreLocalDateTimeInput(returnTime), expectedReturn, day);
-  });
-});
-
-test("atalho preserva mês e ano nas viradas de calendário", () => {
-  const cases = [
-    ["2026-05-31T18:30", "2026-06-02T11:00"],
-    ["2025-12-31T18:30", "2026-01-01T11:00"]
-  ];
-
-  cases.forEach(([currentLocalTime, expectedReturn]) => {
-    const now = storeLocalDateTimeToDate(currentLocalTime);
-    const returnTime = getNextRegularOpening(now);
-
-    assert.equal(toStoreLocalDateTimeInput(returnTime), expectedReturn);
-  });
-});
-
-test("return_time ausente ou inválido mantém o datetime-local vazio", () => {
-  const emptyValues = [null, undefined, "", "   ", 0, false, "inválido"];
-
-  emptyValues.forEach(value => {
-    assert.equal(toValidDate(value), null);
-    assert.equal(toStoreLocalDateTimeInput(value), "");
-  });
-});
-
-test("limpar o horário persiste return_time como null sem alterar a pausa", () => {
-  assert.deepEqual(
-    buildStoreSettingsUpdate(STORE_MODES.PAUSED, "", "Mensagem"),
-    {
-      is_paused: true,
-      store_mode: STORE_MODES.PAUSED,
-      return_time: null,
-      pause_message: "Mensagem"
-    }
-  );
-
-  assert.equal(
-    getStoreState({
-      isPaused: true,
-      mode: STORE_MODES.PAUSED,
-      returnTime: null
-    }),
-    STORE_MODES.PAUSED
-  );
+test("timer e retorno de aba suspensa reavaliam e sincronizam", async () => {
+  const listeners = {}, timers = [], calls = [];
+  const window = {
+    clearTimeout() {},
+    setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; },
+    addEventListener(name, fn) { listeners[name] = fn; }
+  };
+  const document = { hidden: false, addEventListener(name, fn) { listeners[name] = fn; } };
+  status.watchStoreStatus({ window, document, getSettings: () => automatic,
+    render: () => calls.push("render"), refresh: async () => calls.push("refresh") });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ["render", "refresh"]);
+  calls.length = 0;
+  await listeners.focus();
+  listeners.visibilitychange();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ["render", "refresh", "render", "refresh"]);
+  assert.ok(timers.every(timer => timer.delay <= 60000));
 });

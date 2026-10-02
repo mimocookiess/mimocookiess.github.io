@@ -333,7 +333,15 @@
 
           <form id="settings-form">
             <label class="checkbox-label settings-toggle">
-              <input id="store-is-paused" type="checkbox">
+              <input id="store-automatic" name="store-mode" type="radio" checked>
+              <span><strong>Expediente automático</strong><small>Encerra qualquer exceção e segue o expediente regular.</small></span>
+            </label>
+            <label class="checkbox-label settings-toggle">
+              <input id="store-manual-open" name="store-mode" type="radio">
+              <span><strong>Abrir excepcionalmente até meia-noite</strong><small>Vale também fora do expediente, no horário de Santarém.</small></span>
+            </label>
+            <label class="checkbox-label settings-toggle">
+              <input id="store-is-paused" name="store-mode" type="radio">
               <span>
                 <strong>Pausa temporária</strong>
                 <small>Ative para exibir o aviso na loja.</small>
@@ -341,17 +349,19 @@
             </label>
 
             <label class="checkbox-label settings-toggle">
-              <input id="store-closed-today" type="checkbox">
+              <input id="store-closed-today" name="store-mode" type="radio">
               <span>
-                <strong>Fechado por hoje</strong>
-                <small>A loja volta a receber pedidos no próximo dia de funcionamento, às 11h.</small>
+                <strong>Fechamento manual</strong>
+                <small>Bloqueia novos pedidos até o retorno informado; sem horário, permanece fechado.</small>
               </span>
             </label>
+
+            <button id="close-today-button" type="button" class="secondary-button">Fechado por hoje</button>
 
             <label>
               Horário de retorno (opcional)
               <input id="store-return-time" type="datetime-local">
-              <small>No horário informado, a loja reabre automaticamente.</small>
+              <small>No horário de Santarém. Ao terminar, volta a seguir o expediente regular.</small>
             </label>
 
             <button
@@ -725,10 +735,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../supabase-config.js?v=1"></script>
-  <script src="../store-status.js?v=2"></script>
+  <script src="../store-status.js?v=3"></script>
   <script src="image-optimizer.js?v=1"></script>
   <script src="reports.js?v=1"></script>
   <script src="order-receipt.js?v=2"></script>
-  <script src="admin.js?v=20"></script>
+  <script src="admin.js?v=21"></script>
 </body>
 </html>

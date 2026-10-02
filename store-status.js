@@ -2,8 +2,12 @@
   "use strict";
 
   const STORE_TIME_ZONE = "America/Santarem";
+  const REGULAR_OPEN_HOUR = 11;
+  const REGULAR_CLOSE_HOUR = 19;
   const STORE_MODES = Object.freeze({
     OPEN: "open",
+    AUTOMATIC: "automatic",
+    MANUAL_OPEN: "manual_open",
     PAUSED: "paused",
     CLOSED_TODAY: "closed_today"
   });
@@ -101,72 +105,161 @@
       `T${pad(parts.hour)}:${pad(parts.minute)}`;
   }
 
-  function getNextRegularOpening(now = new Date()) {
-    const parts = getStoreDateTimeParts(now);
-
+  function getStoreLocalDate(value) {
+    const parts = getStoreDateTimeParts(value);
     if (!parts) return null;
+    return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  }
 
-    const currentStoreDate = new Date(Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day
-    ));
-    const daysUntilNextOpening = currentStoreDate.getUTCDay() === 0 ? 2 : 1;
-    const nextOpeningDate = new Date(Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day + daysUntilNextOpening
-    ));
+  function localDateAtHour(localDate, hour) {
     const pad = number => String(number).padStart(2, "0");
-    const localValue = `${nextOpeningDate.getUTCFullYear()}-` +
-      `${pad(nextOpeningDate.getUTCMonth() + 1)}-` +
-      `${pad(nextOpeningDate.getUTCDate())}T11:00`;
+    return storeLocalDateTimeToDate(
+      `${localDate.getUTCFullYear()}-${pad(localDate.getUTCMonth() + 1)}-` +
+      `${pad(localDate.getUTCDate())}T${pad(hour)}:00`
+    );
+  }
 
-    return storeLocalDateTimeToDate(localValue);
+  function isRegularlyOpen(now = new Date()) {
+    const parts = getStoreDateTimeParts(now);
+    const localDate = getStoreLocalDate(now);
+    if (!parts || !localDate || localDate.getUTCDay() === 1) return false;
+    return parts.hour >= REGULAR_OPEN_HOUR && parts.hour < REGULAR_CLOSE_HOUR;
+  }
+
+  function getNextRegularOpening(now = new Date(), afterToday = false) {
+    const localDate = getStoreLocalDate(now);
+    if (!localDate) return null;
+    for (let offset = afterToday ? 1 : 0; offset <= 8; offset += 1) {
+      const candidateDate = new Date(localDate.getTime());
+      candidateDate.setUTCDate(candidateDate.getUTCDate() + offset);
+      if (candidateDate.getUTCDay() === 1) continue;
+      const candidate = localDateAtHour(candidateDate, REGULAR_OPEN_HOUR);
+      if (candidate && candidate >= now) return candidate;
+    }
+    return null;
+  }
+
+  function getNextStoreMidnight(now = new Date()) {
+    const localDate = getStoreLocalDate(now);
+    if (!localDate) return null;
+    localDate.setUTCDate(localDate.getUTCDate() + 1);
+    return localDateAtHour(localDate, 0);
   }
 
   function normalizeStoreMode(value, isPaused = false) {
+    if (value === STORE_MODES.AUTOMATIC || value === STORE_MODES.MANUAL_OPEN) {
+      return STORE_MODES.OPEN;
+    }
     if (VALID_STORE_MODES.has(value)) return value;
     return isPaused ? STORE_MODES.PAUSED : STORE_MODES.OPEN;
   }
 
   function getStoreState(settings, now = new Date()) {
-    if (settings?.isPaused !== true) return STORE_MODES.OPEN;
+    const manualOpenUntil = toValidDate(settings?.manualOpenUntil);
+    if (manualOpenUntil && now < manualOpenUntil) return STORE_MODES.OPEN;
 
-    const mode = normalizeStoreMode(settings.mode, true);
-    const returnDate = toValidDate(settings.returnTime);
-
-    if (
-      returnDate &&
-      now.getTime() >= returnDate.getTime()
-    ) {
-      return STORE_MODES.OPEN;
+    if (settings?.isPaused === true) {
+      const returnDate = toValidDate(settings.returnTime);
+      if (!returnDate || now < returnDate) {
+        return normalizeStoreMode(settings.mode, true) === STORE_MODES.CLOSED_TODAY
+          ? STORE_MODES.CLOSED_TODAY
+          : STORE_MODES.PAUSED;
+      }
     }
 
-    return mode === STORE_MODES.CLOSED_TODAY
-      ? STORE_MODES.CLOSED_TODAY
-      : STORE_MODES.PAUSED;
+    return isRegularlyOpen(now) ? STORE_MODES.OPEN : STORE_MODES.CLOSED_TODAY;
   }
 
-  function buildStoreSettingsUpdate(mode, returnTime, pauseMessage) {
-    const normalizedMode = normalizeStoreMode(mode);
-    const isOpen = normalizedMode === STORE_MODES.OPEN;
-
+  function buildStoreSettingsUpdate(
+    mode,
+    returnTime,
+    pauseMessage,
+    now = new Date()
+  ) {
+    const normalizedMode = mode === STORE_MODES.MANUAL_OPEN
+      ? STORE_MODES.MANUAL_OPEN
+      : mode === STORE_MODES.AUTOMATIC
+        ? STORE_MODES.AUTOMATIC
+        : normalizeStoreMode(mode);
+    const isPaused = [STORE_MODES.PAUSED, STORE_MODES.CLOSED_TODAY]
+      .includes(normalizedMode);
     return {
-      is_paused: !isOpen,
-      store_mode: normalizedMode,
-      return_time: isOpen ? null : returnTime || null,
-      pause_message: String(pauseMessage || "").trim() || null
+      is_paused: isPaused,
+      store_mode: isPaused ? normalizedMode : STORE_MODES.OPEN,
+      return_time: isPaused ? returnTime || null : null,
+      pause_message: String(pauseMessage || "").trim() || null,
+      manual_open_until: normalizedMode === STORE_MODES.MANUAL_OPEN
+        ? getNextStoreMidnight(now)?.toISOString() || null
+        : null
     };
+  }
+
+  function getNextStateChange(settings, now = new Date()) {
+    const candidates = [
+      toValidDate(settings?.manualOpenUntil),
+      settings?.isPaused ? toValidDate(settings.returnTime) : null,
+      getNextRegularOpening(now)
+    ];
+    const localDate = getStoreLocalDate(now);
+    if (localDate && localDate.getUTCDay() !== 1) {
+      candidates.push(localDateAtHour(localDate, REGULAR_CLOSE_HOUR));
+    }
+    return candidates
+      .filter(date => date && date > now)
+      .sort((first, second) => first - second)[0] || null;
+  }
+
+  function watchStoreStatus({ window, document, refresh, render, getSettings, active = () => true }) {
+    let timer;
+    let running = false;
+    const schedule = () => {
+      const now = new Date();
+      const transition = getNextStateChange(getSettings(), now);
+      const delay = transition ? transition.getTime() - now.getTime() + 50 : 60000;
+      timer = window.setTimeout(tick, Math.max(50, Math.min(delay, 60000)));
+    };
+    async function tick() {
+      window.clearTimeout(timer);
+      if (running) {
+        if (active()) render();
+        schedule();
+        return;
+      }
+      if (!active()) {
+        schedule();
+        return;
+      }
+      running = true;
+      try {
+        render();
+        await refresh();
+      } finally {
+        running = false;
+        schedule();
+      }
+    }
+    window.addEventListener("focus", tick);
+    window.addEventListener("pageshow", tick);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) tick();
+    });
+    tick();
+    return tick;
   }
 
   const api = Object.freeze({
     STORE_TIME_ZONE,
+    REGULAR_OPEN_HOUR,
+    REGULAR_CLOSE_HOUR,
+    watchStoreStatus,
     STORE_MODES,
     buildStoreSettingsUpdate,
     getStoreDateTimeParts,
     getStoreState,
     getNextRegularOpening,
+    getNextStateChange,
+    getNextStoreMidnight,
+    isRegularlyOpen,
     normalizeStoreMode,
     storeLocalDateTimeToDate,
     toValidDate,

@@ -6,6 +6,7 @@ const {
   STORE_MODES,
   STORE_TIME_ZONE,
   getStoreDateTimeParts,
+  getNextRegularOpening,
   getStoreState: resolveStoreState,
   normalizeStoreMode,
   toValidDate
@@ -34,7 +35,6 @@ let storeSettings = {
   returnTime: null,
   pauseMessage: ""
 };
-let storeStateTimer = null;
 let storePauseDismissed = false;
 let storePauseAnnouncementFrame = null;
 let lastStorePauseAnnouncement = "";
@@ -307,8 +307,13 @@ function getStoreState(now = new Date()) {
 }
 
 function getClosedDetails(now = new Date()) {
-  const returnDate = toValidDate(storeSettings.returnTime);
-  const formattedReturnTime = formatReturnTime(storeSettings.returnTime, now);
+  const configuredReturn = toValidDate(storeSettings.returnTime);
+  const hasActiveManualClosing = storeSettings.isPaused === true &&
+    (!configuredReturn || configuredReturn > now);
+  const returnDate = hasActiveManualClosing
+    ? configuredReturn
+    : getNextRegularOpening(now);
+  const formattedReturnTime = formatReturnTime(returnDate, now);
   const returnHour = formatLocalHour(returnDate);
   const returnsToday = isSameStoreDate(returnDate, now);
   let returnText = "";
@@ -411,34 +416,13 @@ function renderStoreSettings() {
   const isPaused = storeState !== STORE_MODES.OPEN;
   const { formattedReturnTime, message, returnText } = getPauseDetails();
 
-  if (storeStateTimer !== null) {
-    window.clearTimeout(storeStateTimer);
-    storeStateTimer = null;
-  }
-
   cartPauseNotice.hidden = !isPaused;
 
   if (!isPaused) {
     storePauseBanner.hidden = true;
     clearStorePauseAnnouncement();
-    storeSettings.isPaused = false;
-    storeSettings.mode = STORE_MODES.OPEN;
-    storeSettings.returnTime = null;
     refreshWhatsappButton();
     return;
-  }
-
-  const returnDate = toValidDate(storeSettings.returnTime);
-
-  if (returnDate) {
-    const delay = returnDate.getTime() - Date.now();
-
-    if (delay > 0) {
-      storeStateTimer = window.setTimeout(
-        renderStoreSettings,
-        Math.min(delay + 50, 2_147_483_647)
-      );
-    }
   }
 
   if (storeState === STORE_MODES.CLOSED_TODAY) {
@@ -480,7 +464,7 @@ async function loadStoreSettings() {
   try {
     const { data, error } = await supabaseClient
       .from("store_settings")
-      .select("is_paused, store_mode, return_time, pause_message")
+      .select("is_paused, store_mode, return_time, pause_message, manual_open_until")
       .eq("id", 1)
       .maybeSingle();
 
@@ -492,13 +476,14 @@ async function loadStoreSettings() {
       isPaused: data.is_paused === true,
       mode: normalizeStoreMode(data.store_mode, data.is_paused === true),
       returnTime: data.return_time || null,
-      pauseMessage: String(data.pause_message || "").trim()
+      pauseMessage: String(data.pause_message || "").trim(),
+      manualOpenUntil: data.manual_open_until || null
     };
 
     renderStoreSettings();
   } catch (error) {
     console.warn(
-      "Não foi possível carregar o status da loja. Mantendo o funcionamento normal.",
+      "Não foi possível atualizar o status da loja.",
       error
     );
   }
@@ -964,7 +949,7 @@ function getProductStatus(product) {
     product.stock <= 3
   ) {
     return {
-      text: "ACABANDO :O",
+      text: "ÚLTIMOS :O",
       className: "status-low-stock"
     };
   }
@@ -1960,4 +1945,7 @@ async function initializeStore() {
 }
 
 initializeStore();
-loadStoreSettings();
+MimoStoreStatus.watchStoreStatus({
+  window, document, refresh: loadStoreSettings, render: renderStoreSettings,
+  getSettings: () => storeSettings
+});
