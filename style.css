@@ -471,6 +471,8 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 
 .pickup-section { padding: 0 0 98px; }
 .pickup-card {
+  position: relative;
+  isolation: isolate;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -481,6 +483,26 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
   border: 1px solid rgba(109, 61, 47, .08);
 }
 .pickup-card p { max-width: 720px; line-height: 1.65; }
+.halloween-pickup-decoration {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+:root:has(.halloween-hero:not([hidden])) .halloween-pickup-decoration { display: block; }
+.halloween-pickup-decoration img {
+  position: absolute;
+  top: 50%;
+  right: -150px;
+  width: clamp(340px, 38vw, 440px);
+  height: auto;
+  transform: translateY(-50%);
+  opacity: .3;
+  pointer-events: none;
+}
 .pickup-actions { display: grid; gap: 12px; }
 .muted { color: var(--text-soft); }
 
@@ -1122,6 +1144,7 @@ footer a { font-weight: 700; }
   .product-grid { grid-template-columns: 1fr; }
   .product-image-wrap { aspect-ratio: 4 / 3.4; }
   .pickup-card { display: block; padding: 26px 22px; }
+  .halloween-pickup-decoration img { top: 0; right: -47%; width: 100%; transform: none; }
   .pickup-actions { margin-top: 14px; }
   .pickup-actions a { width: 100%; }
   .cart-panel { padding: 22px 16px 40px; }
@@ -1130,4 +1153,8 @@ footer a { font-weight: 700; }
     transform-origin: center;
   }
   .footer-content, .footer-brand-wrap { flex-direction: column; text-align: center; }
+}
+
+@media (max-width: 340px) {
+  .halloween-pickup-decoration img { top: 92px; }
 }
