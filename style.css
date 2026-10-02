@@ -500,10 +500,15 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
   width: clamp(340px, 38vw, 440px);
   height: auto;
   transform: translateY(-50%);
-  opacity: .3;
+  opacity: .39;
   pointer-events: none;
 }
 .pickup-actions { display: grid; gap: 12px; }
+.pickup-card .pickup-actions > .secondary-button { background: transparent; }
+.pickup-card .pickup-actions > .secondary-button:is(:hover, :active, :focus-visible) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .muted { color: var(--text-soft); }
 
 .cart-fab {
