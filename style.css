@@ -482,9 +482,9 @@ h2 { font-size: clamp(32px, 4vw, 48px); }
 .cart-fab span { font-weight: 700; }
 .cart-fab strong { font-size: 14px; }
 .cart-fab-face {
-  width: min(104px, 100%);
+  width: min(62px, 100%);
   height: auto;
-  max-height: 48px;
+  max-height: 29px;
   justify-self: center;
   pointer-events: none;
   user-select: none;
