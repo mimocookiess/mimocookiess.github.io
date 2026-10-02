@@ -38,7 +38,8 @@ const server = http.createServer((req, res) => {
   }
   try {
     res.setHeader("Content-Type", ({ ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-      ".css": "text/css; charset=utf-8", ".webp": "image/webp", ".png": "image/png" })[path.extname(file)] || "application/octet-stream");
+      ".css": "text/css; charset=utf-8", ".webp": "image/webp", ".png": "image/png",
+      ".svg": "image/svg+xml" })[path.extname(file)] || "application/octet-stream");
     res.end(fs.readFileSync(file));
   } catch { res.writeHead(404).end(); }
 });
@@ -74,6 +75,95 @@ let browser;
   for (const [width, height] of [[1440, 1000], [768, 1024], [844, 390], [320, 800], [390, 844], [412, 915]]) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => { cart.clear(); updateCart(); window.scrollTo(0, 0); });
+    assert.match(await page.locator('#cart-fab-summary').innerText(), /^0 itens · R\$\s0,00$/);
+    await page.evaluate(() => { cart.set(PRODUCTS[0].id, 1); updateCart(); });
+    assert.match(await page.locator('#cart-fab-summary').innerText(), /^1 item · R\$\s/);
+    const fab = await page.locator('#cart-fab').evaluate(el => {
+      const label = el.querySelector('span').getBoundingClientRect();
+      const face = el.querySelector('.cart-fab-face');
+      const faceBox = face.getBoundingClientRect();
+      const summary = el.querySelector('strong').getBoundingClientRect();
+      const style = getComputedStyle(el);
+      const channel = value => {
+        value /= 255;
+        return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+      };
+      const luminance = rgb => {
+        const values = rgb.match(/\d+/g).slice(0, 3).map(Number);
+        return .2126 * channel(values[0]) + .7152 * channel(values[1]) + .0722 * channel(values[2]);
+      };
+      const foreground = luminance(style.color);
+      const background = luminance(style.backgroundColor);
+      return {
+        background: style.backgroundColor,
+        color: style.color,
+        summaryFontSize: getComputedStyle(el.querySelector('strong')).fontSize,
+        contrast: (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05),
+        height: el.getBoundingClientRect().height,
+        fits: el.scrollWidth <= el.clientWidth,
+        order: faceBox.width < 1
+          ? label.right + 4 <= summary.left
+          : label.right + 4 <= faceBox.left && faceBox.right + 4 <= summary.left,
+        faceWidth: faceBox.width,
+        faceCenterX: faceBox.left + faceBox.width / 2,
+        faceCenterY: faceBox.top + faceBox.height / 2,
+        facePointerEvents: getComputedStyle(face).pointerEvents,
+        faceDisplay: getComputedStyle(face).display,
+        faceAriaHidden: face.getAttribute('aria-hidden'),
+        faceAlt: face.getAttribute('alt'),
+        faceTabIndex: face.tabIndex,
+        faceClickTarget: document.elementFromPoint(
+          faceBox.left + faceBox.width / 2,
+          faceBox.top + faceBox.height / 2
+        )?.closest('#cart-fab')?.id
+      };
+    });
+    assert.equal(fab.background, 'rgb(217, 135, 67)');
+    assert.equal(fab.color, 'rgb(23, 18, 14)');
+    assert.equal(fab.summaryFontSize, '14px');
+    assert.ok(fab.contrast >= 4.5);
+    assert.equal(fab.height, 64);
+    assert.equal(fab.fits, true);
+    assert.equal(fab.order, true);
+    assert.equal(fab.facePointerEvents, 'none');
+    assert.equal(fab.faceAriaHidden, 'true');
+    assert.equal(fab.faceAlt, '');
+    assert.equal(fab.faceTabIndex, -1);
+    if (fab.faceWidth >= 1) assert.equal(fab.faceClickTarget, 'cart-fab');
+    else assert.equal(fab.faceDisplay, 'none');
+    await page.locator('#cart-fab').screenshot({ path: path.join(output, `cart-fab-${width}.png`) });
+    if (fab.faceWidth >= 1) await page.mouse.click(fab.faceCenterX, fab.faceCenterY);
+    else await page.locator('#cart-fab').click();
+    await page.waitForFunction(() => document.querySelector('#cart-panel').getAttribute('aria-hidden') === 'false');
+    await page.locator('#close-cart').click();
+    await page.waitForFunction(() => document.querySelector('#cart-panel').getAttribute('aria-hidden') === 'true');
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { cart.set(PRODUCTS[0].id, 2); updateCart(); });
+    assert.match(await page.locator('#cart-fab-summary').innerText(), /^2 itens · R\$\s/);
+    const regularFaceWidth = fab.faceWidth;
+    await page.evaluate(() => { cart.set(PRODUCTS[0].id, 9999); updateCart(); });
+    const longFab = await page.locator('#cart-fab').evaluate(el => {
+      const label = el.querySelector('span').getBoundingClientRect();
+      const face = el.querySelector('.cart-fab-face').getBoundingClientRect();
+      const summary = el.querySelector('strong');
+      const summaryBox = summary.getBoundingClientRect();
+      return {
+        fits: el.scrollWidth <= el.clientWidth,
+        textFits: summary.scrollWidth <= summary.clientWidth,
+        textClear: label.right + 4 <= summaryBox.left,
+        faceClear: face.width < 1 || (label.right + 4 <= face.left && face.right + 4 <= summaryBox.left),
+        faceWidth: face.width,
+        height: el.getBoundingClientRect().height
+      };
+    });
+    assert.equal(longFab.fits, true);
+    assert.equal(longFab.textFits, true);
+    assert.equal(longFab.textClear, true);
+    assert.equal(longFab.faceClear, true);
+    assert.ok(longFab.faceWidth <= regularFaceWidth);
+    assert.equal(longFab.height, 64);
+    await page.locator('#cart-fab').screenshot({ path: path.join(output, `cart-fab-long-${width}.png`) });
+    await page.evaluate(() => { cart.set(PRODUCTS[0].id, 1); updateCart(); });
     await page.locator('.hero').screenshot({ path: path.join(output, `hero-${width}.png`) });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
     await page.evaluate(() => { cart.set(PRODUCTS[0].id, 1); updateCart(); openCart(); });
